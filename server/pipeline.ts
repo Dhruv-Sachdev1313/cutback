@@ -119,14 +119,21 @@ export class Pipeline {
           data: { sceneId: draft.id },
         });
         const rendered = await renderScene(draft, evidence, calculation);
-        scenes.push(rendered);
+        // A cached clip can still replace the previous version's scene. The
+        // published flag describes the edit, not whether FFmpeg ran this time.
+        scenes.push({
+          ...rendered,
+          rebuilt: !old || rendered.footageHash !== old.footageHash,
+        });
         await emit({
           role: 'renderer',
           tool: 'render_scene',
           title: '“' + draft.label + '” is ready',
           detail: rendered.rebuilt
             ? 'Rendered a new MP4 with narration and burned-in captions.'
-            : 'Content is unchanged; reused the cached clip.',
+            : rendered.footageHash === old?.footageHash
+              ? 'Content matches the previous cut; reused its clip.'
+              : 'Restored a matching cached clip; this scene changes from the previous cut.',
           status: 'done',
           data: { sceneId: draft.id, hash: rendered.footageHash },
         });
@@ -151,7 +158,7 @@ export class Pipeline {
             previous.scenes
               .filter((s) => !impact.sceneIds.includes(s.id))
               .every((old) => scenes.find((s) => s.id === old.id)?.footageHash === old.footageHash),
-          detail: 'Unrelated scenes keep their original file hashes.',
+          detail: 'Unrelated scenes reuse their exact original media files.',
         },
         {
           name: 'Factual narration',

@@ -1,124 +1,1194 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowDownToLine, ArrowRight, ArrowUpRight, AudioLines, Check, ChevronDown, ChevronRight, CircleCheck, Clapperboard, Clock3, Code2, FileText, GitBranch, History, Layers3, Link2, Loader2, Play, RotateCcw, Scissors, Sparkles, X, AlertCircle } from 'lucide-react';
-import type { AppState, Evidence, EvidenceGraph, Impact, Run, RunEvent, Scene, SceneId, Version } from '../shared/types';
+import {
+  ArrowDownToLine,
+  ArrowRight,
+  ArrowUpRight,
+  AudioLines,
+  Check,
+  ChevronDown,
+  ChevronRight,
+  CircleCheck,
+  Clapperboard,
+  Clock3,
+  Code2,
+  FileText,
+  GitBranch,
+  History,
+  Layers3,
+  Link2,
+  Loader2,
+  Play,
+  RotateCcw,
+  Scissors,
+  Sparkles,
+  X,
+  AlertCircle,
+} from 'lucide-react';
+import type {
+  AppState,
+  Evidence,
+  EvidenceGraph,
+  Impact,
+  Run,
+  RunEvent,
+  Scene,
+  SceneId,
+  Version,
+} from '../shared/types';
 
-const INITIAL:Evidence={orbitBase:7900,orbitAdapter:4900,adapterIncluded:true,formaBase:11900};
-const money=(cents:number)=>'$'+(cents/100).toLocaleString('en-US',{maximumFractionDigits:2,minimumFractionDigits:cents%100?2:0});
-const time=(s:number)=>Math.floor(s/60).toString().padStart(2,'0')+':'+Math.floor(s%60).toString().padStart(2,'0');
-async function api<T>(path:string,body?:unknown):Promise<T>{const r=await fetch('/api'+path,body===undefined?undefined:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const data=await r.json();if(!r.ok)throw new Error(data.error||'Request failed.');return data;}
-const glyphs={system:Layers3,evidence:GitBranch,analyst:AudioLines,editor:Scissors,renderer:Clapperboard,verifier:CircleCheck};
+const INITIAL: Evidence = {
+  orbitBase: 7900,
+  orbitAdapter: 4900,
+  adapterIncluded: true,
+  formaBase: 11900,
+};
+const money = (cents: number) =>
+  '$' +
+  (cents / 100).toLocaleString('en-US', {
+    maximumFractionDigits: 2,
+    minimumFractionDigits: cents % 100 ? 2 : 0,
+  });
+const time = (s: number) =>
+  Math.floor(s / 60)
+    .toString()
+    .padStart(2, '0') +
+  ':' +
+  Math.floor(s % 60)
+    .toString()
+    .padStart(2, '0');
+async function api<T>(path: string, body?: unknown): Promise<T> {
+  const r = await fetch(
+    '/api' + path,
+    body === undefined
+      ? undefined
+      : {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        },
+  );
+  const data = await r.json();
+  if (!r.ok) throw new Error(data.error || 'Request failed.');
+  return data;
+}
+const glyphs = {
+  system: Layers3,
+  evidence: GitBranch,
+  analyst: AudioLines,
+  editor: Scissors,
+  renderer: Clapperboard,
+  verifier: CircleCheck,
+};
 
-export function App(){
-  const [state,setState]=useState<AppState|null>(null);const [error,setError]=useState('');
-  const [view,setView]=useState<'studio'|'graph'|'history'>('studio');const [selectedVersion,setSelectedVersion]=useState('');
-  const [sceneId,setSceneId]=useState<SceneId>('opening');const [evidence,setEvidence]=useState<Evidence>(INITIAL);
-  const [note,setNote]=useState('Correction to the Orbit product sheet: the required power adapter is sold separately.');
-  const [impact,setImpact]=useState<Impact|null>(null);const [run,setRun]=useState<Run|null>(null);const [submitting,setSubmitting]=useState(false);
-  const [inspector,setInspector]=useState<'sources'|'activity'>('sources');const [compare,setCompare]=useState(false);const [provenance,setProvenance]=useState<Scene|null>(null);
-  const player=useRef<HTMLVideoElement>(null);const latestRef=useRef('');const streamRef=useRef<EventSource|null>(null);
-  const current=state?.versions.find(v=>v.id===selectedVersion)||state?.latest;
-  const busy=submitting||run?.status==='running'||!!state?.activeRun;
-  const dirty=state?.latest&&JSON.stringify(evidence)!==JSON.stringify(state.latest.evidence);
-  const refresh=useCallback(async()=>{
-    try{const next=await api<AppState>('/state');setState(next);setError('');
-      if(next.latest&&next.latest.id!==latestRef.current){latestRef.current=next.latest.id;setSelectedVersion(next.latest.id);setEvidence(next.latest.evidence);setImpact(null);}
-      if(next.activeRun)setRun(next.activeRun);
+export function App() {
+  const [state, setState] = useState<AppState | null>(null);
+  const [error, setError] = useState('');
+  const [view, setView] = useState<'studio' | 'graph' | 'history'>('studio');
+  const [selectedVersion, setSelectedVersion] = useState('');
+  const [sceneId, setSceneId] = useState<SceneId>('opening');
+  const [evidence, setEvidence] = useState<Evidence>(INITIAL);
+  const [note, setNote] = useState(
+    'Correction to the Orbit product sheet: the required power adapter is sold separately.',
+  );
+  const [impact, setImpact] = useState<Impact | null>(null);
+  const [run, setRun] = useState<Run | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [inspector, setInspector] = useState<'sources' | 'activity'>('sources');
+  const [compare, setCompare] = useState(false);
+  const [provenance, setProvenance] = useState<Scene | null>(null);
+  const player = useRef<HTMLVideoElement>(null);
+  const latestRef = useRef('');
+  const streamRef = useRef<EventSource | null>(null);
+  const runningRef = useRef<string | null>(null);
+  const current = state?.versions.find((v) => v.id === selectedVersion) || state?.latest;
+  const previousCut = state?.versions.find((v) => current && v.revision === current.revision - 1);
+  const busy = submitting || run?.status === 'running' || !!state?.activeRun;
+  const dirty = state?.latest && JSON.stringify(evidence) !== JSON.stringify(state.latest.evidence);
+  const refresh = useCallback(async () => {
+    try {
+      const next = await api<AppState>('/state');
+      setState(next);
+      setError('');
+      if (next.latest && next.latest.id !== latestRef.current) {
+        latestRef.current = next.latest.id;
+        setSelectedVersion(next.latest.id);
+        setEvidence(next.latest.evidence);
+        setImpact(null);
+        setSceneId(next.latest.revision > 1 ? 'verdict' : 'opening');
+      }
+      if (next.activeRun) setRun(next.activeRun);
+      else if (runningRef.current) {
+        const terminal = await api<Run>('/runs/' + runningRef.current);
+        if (terminal.status !== 'running') {
+          setRun(terminal);
+          setSubmitting(false);
+        }
+      }
       return next;
-    }catch(e){setError((e as Error).message);return null;}
-  },[]);
-  useEffect(()=>{void refresh();const timer=setInterval(()=>void refresh(),5000);return()=>clearInterval(timer);},[refresh]);
-  useEffect(()=>{
-    if(!state?.latest)return;const timer=setTimeout(()=>{void api<Impact>('/impact',evidence).then(setImpact).catch(e=>setError(e.message));},220);return()=>clearTimeout(timer);
-  },[evidence,state?.latest?.id]);
-  const watchedRunId=run?.status==='running'?run.id:state?.activeRun?.id;
-  useEffect(()=>{
-    if(!watchedRunId)return;
-    streamRef.current?.close();const stream=new EventSource('/api/runs/'+watchedRunId+'/events');streamRef.current=stream;
-    stream.onmessage=(message)=>{const event=JSON.parse(message.data) as RunEvent;setRun(old=>old?{...old,events:[...old.events.filter(e=>e.seq!==event.seq),event].sort((a,b)=>a.seq-b.seq)}:old);
-      if(event.tool==='trace_impact'&&event.data)setImpact(event.data as Impact);
+    } catch (e) {
+      setError((e as Error).message);
+      setState((old) => (old ? { ...old, graphConnected: false } : old));
+      return null;
+    }
+  }, []);
+  useEffect(() => {
+    runningRef.current = run?.status === 'running' ? run.id : null;
+  }, [run]);
+  useEffect(() => {
+    void refresh();
+    const timer = setInterval(() => void refresh(), 5000);
+    return () => clearInterval(timer);
+  }, [refresh]);
+  useEffect(() => {
+    if (!state?.latest) return;
+    const timer = setTimeout(() => {
+      void api<Impact>('/impact', evidence)
+        .then(setImpact)
+        .catch((e) => setError(e.message));
+    }, 220);
+    return () => clearTimeout(timer);
+  }, [evidence, state?.latest?.id]);
+  const watchedRunId = run?.status === 'running' ? run.id : state?.activeRun?.id;
+  useEffect(() => {
+    if (!watchedRunId) return;
+    streamRef.current?.close();
+    const stream = new EventSource('/api/runs/' + watchedRunId + '/events');
+    streamRef.current = stream;
+    stream.onmessage = (message) => {
+      const event = JSON.parse(message.data) as RunEvent;
+      setRun((old) =>
+        old
+          ? {
+              ...old,
+              events: [...old.events.filter((e) => e.seq !== event.seq), event].sort(
+                (a, b) => a.seq - b.seq,
+              ),
+            }
+          : old,
+      );
+      if (event.tool === 'trace_impact' && event.data) setImpact(event.data as Impact);
     };
-    const finish=()=>{stream.close();void api<Run>('/runs/'+watchedRunId).then(r=>{setRun(r);setSubmitting(false);if(r.error)setError(r.error);void refresh();});};
-    stream.addEventListener('finished',finish);
-    return()=>{stream.close();};
-  },[watchedRunId,refresh]);
-  useEffect(()=>{function onKey(e:KeyboardEvent){if(e.key==='Escape'){setCompare(false);setProvenance(null);}}window.addEventListener('keydown',onKey);return()=>window.removeEventListener('keydown',onKey);},[]);
-  async function rebuild(){
-    if(!state?.latest)return;setSubmitting(true);setError('');setInspector('activity');
-    try{const next=await api<Run>('/revisions',{expectedRevision:state.latest.revision,evidence,sourceNote:note});setRun(next);setView('studio');}
-    catch(e){setError((e as Error).message);setSubmitting(false);}
+    const finish = () => {
+      stream.close();
+      void api<Run>('/runs/' + watchedRunId).then((r) => {
+        setRun(r);
+        setSubmitting(false);
+        if (r.error) setError(r.error);
+        void refresh();
+      });
+    };
+    stream.addEventListener('finished', finish);
+    return () => {
+      stream.close();
+    };
+  }, [watchedRunId, refresh]);
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') {
+        setCompare(false);
+        setProvenance(null);
+      }
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+  async function rebuild() {
+    if (!state?.latest) return;
+    setSubmitting(true);
+    setError('');
+    setInspector('activity');
+    try {
+      const next = await api<Run>('/revisions', {
+        expectedRevision: state.latest.revision,
+        evidence,
+        sourceNote: note,
+      });
+      setRun(next);
+      setView('studio');
+    } catch (e) {
+      setError((e as Error).message);
+      setSubmitting(false);
+    }
   }
-  function loadCorrection(){if(!state?.latest)return;setEvidence({...state.latest.evidence,adapterIncluded:false});setNote('Correction to the Orbit product sheet: the required power adapter is sold separately. It costs '+money(state.latest.evidence.orbitAdapter)+'.');setInspector('sources');}
-  function restore(){setEvidence(INITIAL);setNote('Restore the original synthetic product sheet. The required adapter is included.');setInspector('sources');}
-  function selectScene(scene:Scene){setSceneId(scene.id);if(player.current){player.current.currentTime=current?.scenes.slice(0,scene.order).reduce((n,s)=>n+s.duration,0)||0;}}
-  const activeScene=current?.scenes.find(s=>s.id===sceneId)||current?.scenes[0];
-  const completed=run?.events.filter(e=>e.status==='done').length||0;
-  const showImpact=dirty?impact:run?.impact;
-  return <div className="app-shell">
-    <aside className="sidebar">
-      <a className="brand" href="/" aria-label="CUTBACK home"><span className="brand-mark"><i/><i/></span>CUTBACK<span className="brand-dot">®</span></a>
-      <div className="workspace-label"><span className="avatar">D</span><span>Your workspace<small>Creator studio</small></span><ChevronDown size={14}/></div>
-      <div className="nav-caption">WORKSPACE</div>
-      <nav aria-label="Workspace">
-        <button className={view==='studio'?'nav-item active':'nav-item'} onClick={()=>setView('studio')}><Clapperboard size={18}/>The living edit<span className="nav-count">1</span></button>
-        <button className={view==='graph'?'nav-item active':'nav-item'} onClick={()=>setView('graph')}><GitBranch size={18}/>Evidence map</button>
-        <button className={view==='history'?'nav-item active':'nav-item'} onClick={()=>setView('history')}><History size={18}/>Version history{state&&state.versions.length>1&&<span className="nav-count">{state.versions.length}</span>}</button>
-      </nav>
-      <div className="sidebar-rule"/><div className="nav-caption">CURRENT PROJECT</div>
-      <div className="project-mini"><span className="project-tile"><AudioLines size={21}/></span><span>The speaker test<small>Field notes / 001</small></span></div>
-      <div className="sidebar-bottom"><div className="small-statement">Facts change.<br/><em>Stories should, too.</em></div><div className="database-badge"><span className={state?.graphConnected?'status-dot':'status-dot offline'}/>FalkorDB connected<GitBranch size={12}/></div><span className="build-label">GRAPH HACKS · TRACK 01</span></div>
-    </aside>
-    <div className="workspace-main">
-      <header className="topbar"><div className="breadcrumbs">Workspace<ChevronRight size={13}/><span>Field notes 001</span></div><div className="topbar-right"><span className="mode-pill"><span className={'status-dot '+(state?.mode==='openai'?'':'neutral')}/>{state?.mode==='openai'?'OpenAI agent':'Local rules mode'}</span><span className="profile">D</span></div></header>
-      <div className="workspace-grid">
-        <main className="main-content">
-          <div className="project-heading"><div><div className="eyebrow"><span/>THE LIVING EDIT</div><h1>The everyday speaker test</h1><p>An evidence-linked film. Always open to a better answer.</p></div><div className="heading-actions"><button className="icon-button" title="Restore original source values" aria-label="Restore original source values" disabled={!!busy||!state?.latest} onClick={restore}><RotateCcw size={17}/></button></div></div>
-          {error&&<div className="error-banner" role="alert"><AlertCircle size={18}/><span>{error}</span><button className="text-button" onClick={()=>void refresh()}>Retry</button></div>}
-          <div className="content-toolbar"><div className="content-tabs" role="tablist"><button role="tab" aria-selected={view==='studio'} className={view==='studio'?'selected':''} onClick={()=>setView('studio')}><Clapperboard size={15}/>Studio</button><button role="tab" aria-selected={view==='graph'} className={view==='graph'?'selected':''} onClick={()=>setView('graph')}><GitBranch size={15}/>Evidence</button><button role="tab" aria-selected={view==='history'} className={view==='history'?'selected':''} onClick={()=>setView('history')}><History size={15}/>History</button></div><div className="toolbar-actions"><button className="text-button" disabled={!state||state.versions.length<2} onClick={()=>setCompare(true)}><Layers3 size={15}/>Compare cuts</button>{current&&<a className="export-button" href={current.videoUrl} download={'cutback-v'+current.revision+'.mp4'}><ArrowDownToLine size={14}/>Export</a>}</div></div>
-          {view==='studio'&&<>
-            <div className="player-frame">{current?<video ref={player} key={current.id} controls playsInline preload="metadata" poster={current.scenes[0].posterUrl} src={current.videoUrl} onTimeUpdate={()=>{const t=player.current?.currentTime||0;let sum=0;for(const s of current.scenes){sum+=s.duration;if(t<sum){setSceneId(s.id);break;}}}} aria-label={'Cutback video version '+current.revision}/>:<div className="empty-player"><span className="large-mark"><i/><i/></span><h2>Your first cut is taking shape.</h2><p>Connecting the evidence. Composing the story.</p><Loader2 className="spin" size={23}/></div>}{current&&<span className="player-version">CUT {String(current.revision).padStart(2,'0')}</span>}</div>
-            <div className="player-meta"><span><span className="status-dot"/>{current?'Verified against source v'+current.revision:'Preparing the first cut'}<span className="meta-divider">/</span>{current?time(current.duration):'--:--'}<span className="meta-divider">/</span>1280 × 720</span><span className="synthetic-label">SYNTHETIC PRODUCT STUDY</span></div>
-            <section className="storyboard-section"><div className="section-line"><h2>Story sequence <span>04 scenes</span></h2><span>{dirty?`${impact?.sceneIds.length||0} scenes affected`:'Each scene has a source.'}</span></div><div className="storyboard">{current?.scenes.map(s=><button key={s.id} className={'scene-card '+(sceneId===s.id?'scene-selected ':'')+(dirty&&impact?.sceneIds.includes(s.id)?'scene-affected':'')} onClick={()=>selectScene(s)}><div className="scene-thumb"><img src={s.posterUrl} alt={s.label}/><span className="scene-number">0{s.order+1}</span>{dirty&&impact?.sceneIds.includes(s.id)?<span className="scene-state orange">Will update</span>:current.revision>1&&<span className={'scene-state '+(s.rebuilt?'orange':'')}>{s.rebuilt?'Rebuilt':'Preserved'}</span>}</div><div className="scene-caption"><span>{s.label}</span><small>{time(s.duration)}</small></div></button>)||[1,2,3,4].map(n=><div className="scene-skeleton" key={n}/>)}</div></section>
-            {activeScene&&<div className="transcript-card"><div className="transcript-icon"><AudioLines size={18}/></div><div><div className="transcript-heading"><h3>{activeScene.label}</h3><span>NARRATION</span></div><p>{activeScene.narration}</p><button className="source-link" onClick={()=>setProvenance(activeScene)}><Link2 size={13}/>{activeScene.citedFacts.length?activeScene.citedFacts.length+' linked facts · inspect evidence':'Editorial framing · no price claim'}<ArrowUpRight size={12}/></button></div></div>}
-          </>}
-          {view==='graph'&&state&&<EvidenceMap graph={state.graph} impact={showImpact||null}/>}
-          {view==='history'&&<section className="history-view"><div className="section-line"><h2>A story with a memory.</h2><span>{state?.versions.length||0} preserved cuts</span></div>{state?.versions.map(v=><article className="version-card" key={v.id}><img src={v.scenes[2].posterUrl} alt={'Version '+v.revision+' verdict'}/><div><div className="version-tag">VERSION {String(v.revision).padStart(2,'0')}{v.id===state.latest?.id&&<span>Latest</span>}</div><h3>{v.calculation.winner==='tie'?'A tie on upfront cost':v.calculation.winnerName+' is the lower-cost pick'}</h3><p>{v.sourceNote}</p><div className="version-footnote"><Clock3 size={12}/>{new Date(v.createdAt).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}<span>·</span>{v.scenes.filter(s=>s.rebuilt).length} scenes rendered<span>·</span>{v.mode==='openai'?'OpenAI':'Local rules'}</div><div className="version-actions"><button className="text-button" onClick={()=>{setSelectedVersion(v.id);setView('studio');setSceneId('opening');}}>Open cut<ArrowRight size={13}/></button><a href={v.captionsUrl} download>Download captions</a></div></div></article>)}</section>}
-          <div className="bottom-note"><GitBranch size={14}/><span>Every edit has a reason. Every reason has a source.</span><button onClick={()=>setView('graph')}>Explore the graph<ArrowUpRight size={12}/></button></div>
-        </main>
-        <aside className="inspector"><div className="inspector-tabs"><button className={inspector==='sources'?'selected':''} onClick={()=>setInspector('sources')}><FileText size={15}/>Sources</button><button className={inspector==='activity'?'selected':''} onClick={()=>setInspector('activity')}><Sparkles size={15}/>Activity{busy&&<span className="live-dot"/>}</button></div>
-          {inspector==='sources'?<div className="source-inspector"><div className="inspector-heading"><h2>The source of the story</h2><p>Change a fact. See what follows.</p></div>
-            <div className="twist-card"><div className="twist-kicker"><Sparkles size={14}/>TRY THE PLOT TWIST</div><h3>What if the adapter<br/>wasn’t included?</h3><p>One small correction. A different conclusion.</p><button disabled={!!busy||!state?.latest} onClick={loadCorrection}>Load the correction<ArrowUpRight size={15}/></button></div>
-            <div className="source-card"><div className="source-card-title"><span className="document-icon"><FileText size={17}/></span><div>Orbit Mini<small>Product sheet · synthetic</small></div><span className="source-version">v{state?.latest?.revision||1}</span></div>
-              <PriceField label="Speaker price" value={evidence.orbitBase} disabled={!!busy} onChange={n=>setEvidence(e=>({...e,orbitBase:n}))}/>
-              <PriceField label="Required adapter" value={evidence.orbitAdapter} disabled={!!busy} onChange={n=>setEvidence(e=>({...e,orbitAdapter:n}))}/>
-              <div className={'inclusion-row '+(!evidence.adapterIncluded?'changed':'')}><div><span>Adapter included</span><small>{evidence.adapterIncluded?'Ready to use at the listed price':'Add adapter to total cost'}</small></div><button role="switch" aria-label="Adapter included in speaker price" aria-checked={evidence.adapterIncluded} disabled={!!busy} className={'switch '+(evidence.adapterIncluded?'on':'')} onClick={()=>setEvidence(e=>({...e,adapterIncluded:!e.adapterIncluded}))}><span/></button></div>
+  function loadCorrection() {
+    if (!state?.latest) return;
+    setEvidence({ ...state.latest.evidence, adapterIncluded: false });
+    setNote(
+      'Correction to the Orbit product sheet: the required power adapter is sold separately. It costs ' +
+        money(state.latest.evidence.orbitAdapter) +
+        '.',
+    );
+    setInspector('sources');
+  }
+  function restore() {
+    setEvidence(INITIAL);
+    setNote('Restore the original synthetic product sheet. The required adapter is included.');
+    setInspector('sources');
+  }
+  function selectScene(scene: Scene) {
+    setSceneId(scene.id);
+    if (player.current) {
+      player.current.currentTime =
+        current?.scenes.slice(0, scene.order).reduce((n, s) => n + s.duration, 0) || 0;
+    }
+  }
+  const activeScene = current?.scenes.find((s) => s.id === sceneId) || current?.scenes[0];
+  const completed = run?.events.filter((e) => e.status === 'done').length || 0;
+  const showImpact = dirty ? impact : run?.impact;
+  return (
+    <div className="app-shell">
+      <aside className="sidebar">
+        <a className="brand" href="/" aria-label="CUTBACK home">
+          <span className="brand-mark">
+            <i />
+            <i />
+          </span>
+          CUTBACK<span className="brand-dot">®</span>
+        </a>
+        <div className="workspace-label">
+          <span className="avatar">D</span>
+          <span>
+            Your workspace<small>Creator studio</small>
+          </span>
+          <ChevronDown size={14} />
+        </div>
+        <div className="nav-caption">WORKSPACE</div>
+        <nav aria-label="Workspace">
+          <button
+            className={view === 'studio' ? 'nav-item active' : 'nav-item'}
+            onClick={() => setView('studio')}
+          >
+            <Clapperboard size={18} />
+            The living edit<span className="nav-count">1</span>
+          </button>
+          <button
+            className={view === 'graph' ? 'nav-item active' : 'nav-item'}
+            onClick={() => setView('graph')}
+          >
+            <GitBranch size={18} />
+            Evidence map
+          </button>
+          <button
+            className={view === 'history' ? 'nav-item active' : 'nav-item'}
+            onClick={() => setView('history')}
+          >
+            <History size={18} />
+            Version history
+            {state && state.versions.length > 1 && (
+              <span className="nav-count">{state.versions.length}</span>
+            )}
+          </button>
+        </nav>
+        <div className="sidebar-rule" />
+        <div className="nav-caption">CURRENT PROJECT</div>
+        <div className="project-mini">
+          <span className="project-tile">
+            <AudioLines size={21} />
+          </span>
+          <span>
+            The speaker test<small>Field notes / 001</small>
+          </span>
+        </div>
+        <div className="sidebar-bottom">
+          <div className="small-statement">
+            Facts change.
+            <br />
+            <em>Stories should, too.</em>
+          </div>
+          <div className="database-badge">
+            <span className={state?.graphConnected ? 'status-dot' : 'status-dot offline'} />
+            {state?.graphConnected ? 'FalkorDB connected' : 'Connecting to FalkorDB'}
+            <GitBranch size={12} />
+          </div>
+          <span className="build-label">GRAPH HACKS · TRACK 01</span>
+        </div>
+      </aside>
+      <div className="workspace-main">
+        <header className="topbar">
+          <div className="breadcrumbs">
+            Workspace
+            <ChevronRight size={13} />
+            <span>Field notes 001</span>
+          </div>
+          <div className="topbar-right">
+            <span className="mode-pill">
+              <span className={'status-dot ' + (state?.mode === 'openai' ? '' : 'neutral')} />
+              {state?.mode === 'openai' ? 'OpenAI agent' : 'Local rules mode'}
+            </span>
+            <span className="profile">D</span>
+          </div>
+        </header>
+        <div className="workspace-grid">
+          <main className="main-content">
+            <div className="project-heading">
+              <div>
+                <div className="eyebrow">
+                  <span />
+                  THE LIVING EDIT
+                </div>
+                <h1>The everyday speaker test</h1>
+                <p>An evidence-linked film. Always open to a better answer.</p>
+              </div>
+              <div className="heading-actions">
+                <button
+                  className="icon-button"
+                  title="Restore original source values"
+                  aria-label="Restore original source values"
+                  disabled={!!busy || !state?.latest}
+                  onClick={restore}
+                >
+                  <RotateCcw size={17} />
+                </button>
+              </div>
             </div>
-            <div className="source-card"><div className="source-card-title"><span className="document-icon sage"><FileText size={17}/></span><div>Forma One<small>Product sheet · synthetic</small></div><span className="source-version">v{state?.latest?.revision||1}</span></div><PriceField label="Complete price" value={evidence.formaBase} disabled={!!busy} onChange={n=>setEvidence(e=>({...e,formaBase:n}))}/><div className="included-note"><Check size={12}/>All required components included</div></div>
-            <label className="note-label">Correction note<textarea value={note} disabled={!!busy} onChange={e=>setNote(e.target.value)} maxLength={1000} rows={3}/></label>
-            <div className={'impact-summary '+(dirty?'has-changes':'')}><GitBranch size={17}/><div>{dirty?<><strong>{impact?.sceneIds.length||0} scenes will be reconsidered</strong><span>Graph paths determine the edit.</span></>:<><strong>All scenes match their sources</strong><span>Update a fact to trace its impact.</span></>}</div></div>
-            <button className="primary-button rebuild-button" disabled={!dirty||!!busy||!note.trim()} onClick={()=>void rebuild()}>{busy?<Loader2 size={17} className="spin"/>:<Scissors size={17}/>} {busy?'Rebuilding your story…':'Rebuild affected scenes'}{!busy&&<ArrowRight size={16}/>}</button>
-            <p className="under-button">Your previous cut is always preserved.</p>
-          </div>:<div className="activity-inspector"><div className="inspector-heading"><h2>{busy?'The edit is in motion.':run?.status==='complete'?'A new perspective.':'Behind the edit.'}</h2><p>{busy?'Real tool calls. Live progress.':run?'An inspectable record of every action.':'Apply a correction to watch the workflow.'}</p></div><div className="agent-mode-note"><span className={'status-dot '+(state?.mode==='openai'?'':'neutral')}/>{state?.mode==='openai'?'OpenAI chooses the graph tools.':'Local rules · no OpenAI key configured.'}</div>{run?<><div className="run-summary"><span>{run.status==='running'?<Loader2 size={18} className="spin"/>:run.status==='complete'?<CircleCheck size={18}/>:<AlertCircle size={18}/>}<strong>Revision {run.revision}</strong></span><small>{completed} steps complete</small></div><div className="event-list">{run.events.map(event=><ActivityEvent key={event.seq} event={event}/>)}</div>{run.status!=='running'&&<button className="secondary-button" onClick={()=>setInspector('sources')}>Back to sources<ArrowRight size={14}/></button>}</>:<div className="activity-empty"><GitBranch size={36}/><p>Evidence → analysis → edit → render → verify.</p><button className="text-button" onClick={()=>setInspector('sources')}>Try a source correction<ArrowRight size={14}/></button></div>}</div>}
-        </aside>
+            {error && (
+              <div className="error-banner" role="alert">
+                <AlertCircle size={18} />
+                <span>{error}</span>
+                <button className="text-button" onClick={() => void refresh()}>
+                  Retry
+                </button>
+              </div>
+            )}
+            <div className="content-toolbar">
+              <div className="content-tabs" role="tablist">
+                <button
+                  role="tab"
+                  aria-selected={view === 'studio'}
+                  className={view === 'studio' ? 'selected' : ''}
+                  onClick={() => setView('studio')}
+                >
+                  <Clapperboard size={15} />
+                  Studio
+                </button>
+                <button
+                  role="tab"
+                  aria-selected={view === 'graph'}
+                  className={view === 'graph' ? 'selected' : ''}
+                  onClick={() => setView('graph')}
+                >
+                  <GitBranch size={15} />
+                  Evidence
+                </button>
+                <button
+                  role="tab"
+                  aria-selected={view === 'history'}
+                  className={view === 'history' ? 'selected' : ''}
+                  onClick={() => setView('history')}
+                >
+                  <History size={15} />
+                  History
+                </button>
+              </div>
+              <div className="toolbar-actions">
+                <button
+                  className="text-button"
+                  disabled={!state || state.versions.length < 2}
+                  onClick={() => setCompare(true)}
+                >
+                  <Layers3 size={15} />
+                  Compare cuts
+                </button>
+                {current && (
+                  <a
+                    className="export-button"
+                    href={current.videoUrl}
+                    download={'cutback-v' + current.revision + '.mp4'}
+                  >
+                    <ArrowDownToLine size={14} />
+                    Export
+                  </a>
+                )}
+              </div>
+            </div>
+            {view === 'studio' && (
+              <>
+                {current && previousCut && (
+                  <div className="revision-reveal">
+                    <span className="reveal-icon">
+                      <Sparkles size={17} />
+                    </span>
+                    <div>
+                      <small>
+                        {current.calculation.winner !== previousCut.calculation.winner
+                          ? 'THE CONCLUSION CHANGED'
+                          : 'THE STORY IS UP TO DATE'}
+                      </small>
+                      <strong>
+                        {current.calculation.winner !== previousCut.calculation.winner && (
+                          <>
+                            <s>{previousCut.calculation.winnerName}</s>
+                            <ArrowRight size={13} />
+                          </>
+                        )}
+                        {current.calculation.winner === 'tie'
+                          ? 'Equal upfront cost'
+                          : current.calculation.winnerName +
+                            ' · ' +
+                            money(current.calculation.savings) +
+                            ' less'}
+                      </strong>
+                    </div>
+                    <span className="reveal-count">
+                      {current.scenes.filter((s) => s.rebuilt).length} updated ·{' '}
+                      {current.scenes.filter((s) => !s.rebuilt).length} preserved
+                    </span>
+                  </div>
+                )}
+                <div className="player-frame">
+                  {current ? (
+                    <video
+                      ref={player}
+                      key={current.id}
+                      controls
+                      playsInline
+                      preload="metadata"
+                      poster={current.scenes[sceneId === 'verdict' ? 2 : 0].posterUrl}
+                      src={current.videoUrl}
+                      onLoadedMetadata={() => {
+                        if (player.current && current.revision > 1 && sceneId === 'verdict')
+                          player.current.currentTime =
+                            current.scenes.slice(0, 2).reduce((n, s) => n + s.duration, 0) + 0.35;
+                      }}
+                      onTimeUpdate={() => {
+                        const t = player.current?.currentTime || 0;
+                        let sum = 0;
+                        for (const s of current.scenes) {
+                          sum += s.duration;
+                          if (t < sum) {
+                            setSceneId(s.id);
+                            break;
+                          }
+                        }
+                      }}
+                      aria-label={'Cutback video version ' + current.revision}
+                    />
+                  ) : (
+                    <div className="empty-player">
+                      <span className="large-mark">
+                        <i />
+                        <i />
+                      </span>
+                      <h2>Your first cut is taking shape.</h2>
+                      <p>Connecting the evidence. Composing the story.</p>
+                      <Loader2 className="spin" size={23} />
+                    </div>
+                  )}
+                  {current && (
+                    <span className="player-version">
+                      CUT {String(current.revision).padStart(2, '0')}
+                    </span>
+                  )}
+                </div>
+                <div className="player-meta">
+                  <span>
+                    <span className="status-dot" />
+                    {current
+                      ? 'Verified against source v' + current.revision
+                      : 'Preparing the first cut'}
+                    <span className="meta-divider">/</span>
+                    {current ? time(current.duration) : '--:--'}
+                    <span className="meta-divider">/</span>1280 × 720
+                  </span>
+                  <span className="synthetic-label">SYNTHETIC PRODUCT STUDY</span>
+                </div>
+                <section className="storyboard-section">
+                  <div className="section-line">
+                    <h2>
+                      Story sequence <span>04 scenes</span>
+                    </h2>
+                    <span>
+                      {dirty
+                        ? `${impact?.sceneIds.length || 0} scenes affected`
+                        : 'Each scene has a source.'}
+                    </span>
+                  </div>
+                  <div className="storyboard">
+                    {current?.scenes.map((s) => (
+                      <button
+                        key={s.id}
+                        className={
+                          'scene-card ' +
+                          (sceneId === s.id ? 'scene-selected ' : '') +
+                          (dirty && impact?.sceneIds.includes(s.id) ? 'scene-affected' : '')
+                        }
+                        onClick={() => selectScene(s)}
+                      >
+                        <div className="scene-thumb">
+                          <img src={s.posterUrl} alt={s.label} />
+                          <span className="scene-number">0{s.order + 1}</span>
+                          {dirty && impact?.sceneIds.includes(s.id) ? (
+                            <span className="scene-state orange">Will update</span>
+                          ) : (
+                            current.revision > 1 && (
+                              <span className={'scene-state ' + (s.rebuilt ? 'orange' : '')}>
+                                {s.rebuilt ? 'Updated' : 'Preserved'}
+                              </span>
+                            )
+                          )}
+                        </div>
+                        <div className="scene-caption">
+                          <span>{s.label}</span>
+                          <small>{time(s.duration)}</small>
+                        </div>
+                      </button>
+                    )) || [1, 2, 3, 4].map((n) => <div className="scene-skeleton" key={n} />)}
+                  </div>
+                </section>
+                {activeScene && (
+                  <div className="transcript-card">
+                    <div className="transcript-icon">
+                      <AudioLines size={18} />
+                    </div>
+                    <div>
+                      <div className="transcript-heading">
+                        <h3>{activeScene.label}</h3>
+                        <span>NARRATION</span>
+                      </div>
+                      <p>{activeScene.narration}</p>
+                      <button className="source-link" onClick={() => setProvenance(activeScene)}>
+                        <Link2 size={13} />
+                        {activeScene.citedFacts.length
+                          ? activeScene.citedFacts.length + ' linked facts · inspect evidence'
+                          : 'Editorial framing · no price claim'}
+                        <ArrowUpRight size={12} />
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+            {view === 'graph' && state && (
+              <EvidenceMap graph={state.graph} impact={showImpact || null} />
+            )}
+            {view === 'history' && (
+              <section className="history-view">
+                <div className="section-line">
+                  <h2>A story with a memory.</h2>
+                  <span>{state?.versions.length || 0} preserved cuts</span>
+                </div>
+                {state?.versions.map((v) => (
+                  <article className="version-card" key={v.id}>
+                    <img src={v.scenes[2].posterUrl} alt={'Version ' + v.revision + ' verdict'} />
+                    <div>
+                      <div className="version-tag">
+                        VERSION {String(v.revision).padStart(2, '0')}
+                        {v.id === state.latest?.id && <span>Latest</span>}
+                      </div>
+                      <h3>
+                        {v.calculation.winner === 'tie'
+                          ? 'A tie on upfront cost'
+                          : v.calculation.winnerName + ' is the lower-cost pick'}
+                      </h3>
+                      <p>{v.sourceNote}</p>
+                      <div className="version-footnote">
+                        <Clock3 size={12} />
+                        {new Date(v.createdAt).toLocaleTimeString([], {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
+                        <span>·</span>
+                        {v.scenes.filter((s) => s.rebuilt).length} scenes updated<span>·</span>
+                        {v.mode === 'openai' ? 'OpenAI' : 'Local rules'}
+                      </div>
+                      <div className="version-actions">
+                        <button
+                          className="text-button"
+                          onClick={() => {
+                            setSelectedVersion(v.id);
+                            setView('studio');
+                            setSceneId('opening');
+                          }}
+                        >
+                          Open cut
+                          <ArrowRight size={13} />
+                        </button>
+                        <a href={v.captionsUrl} download>
+                          Download captions
+                        </a>
+                      </div>
+                    </div>
+                  </article>
+                ))}
+              </section>
+            )}
+            <div className="bottom-note">
+              <GitBranch size={14} />
+              <span>Every edit has a reason. Every reason has a source.</span>
+              <button onClick={() => setView('graph')}>
+                Explore the graph
+                <ArrowUpRight size={12} />
+              </button>
+            </div>
+          </main>
+          <aside className="inspector">
+            <div className="inspector-tabs">
+              <button
+                className={inspector === 'sources' ? 'selected' : ''}
+                onClick={() => setInspector('sources')}
+              >
+                <FileText size={15} />
+                Sources
+              </button>
+              <button
+                className={inspector === 'activity' ? 'selected' : ''}
+                onClick={() => setInspector('activity')}
+              >
+                <Sparkles size={15} />
+                Activity{busy && <span className="live-dot" />}
+              </button>
+            </div>
+            {inspector === 'sources' ? (
+              <div className="source-inspector">
+                <div className="inspector-heading">
+                  <h2>The source of the story</h2>
+                  <p>Change a fact. See what follows.</p>
+                </div>
+                <div className="twist-card">
+                  <div className="twist-kicker">
+                    <Sparkles size={14} />
+                    TRY THE PLOT TWIST
+                  </div>
+                  <h3>
+                    What if the adapter
+                    <br /> wasn’t included?
+                  </h3>
+                  <p>One small correction. A different conclusion.</p>
+                  <button disabled={!!busy || !state?.latest} onClick={loadCorrection}>
+                    Load the correction
+                    <ArrowUpRight size={15} />
+                  </button>
+                </div>
+                <div className="source-card">
+                  <div className="source-card-title">
+                    <span className="document-icon">
+                      <FileText size={17} />
+                    </span>
+                    <div>
+                      Orbit Mini<small>Product sheet · synthetic</small>
+                    </div>
+                    <span className="source-version">v{state?.latest?.revision || 1}</span>
+                  </div>
+                  <PriceField
+                    label="Speaker price"
+                    value={evidence.orbitBase}
+                    disabled={!!busy}
+                    onChange={(n) => setEvidence((e) => ({ ...e, orbitBase: n }))}
+                  />
+                  <PriceField
+                    label="Required adapter"
+                    value={evidence.orbitAdapter}
+                    disabled={!!busy}
+                    onChange={(n) => setEvidence((e) => ({ ...e, orbitAdapter: n }))}
+                  />
+                  <div className={'inclusion-row ' + (!evidence.adapterIncluded ? 'changed' : '')}>
+                    <div>
+                      <span>Adapter included</span>
+                      <small>
+                        {evidence.adapterIncluded
+                          ? 'Ready to use at the listed price'
+                          : 'Add adapter to total cost'}
+                      </small>
+                    </div>
+                    <button
+                      role="switch"
+                      aria-label="Adapter included in speaker price"
+                      aria-checked={evidence.adapterIncluded}
+                      disabled={!!busy}
+                      className={'switch ' + (evidence.adapterIncluded ? 'on' : '')}
+                      onClick={() =>
+                        setEvidence((e) => ({ ...e, adapterIncluded: !e.adapterIncluded }))
+                      }
+                    >
+                      <span />
+                    </button>
+                  </div>
+                </div>
+                <div className="source-card">
+                  <div className="source-card-title">
+                    <span className="document-icon sage">
+                      <FileText size={17} />
+                    </span>
+                    <div>
+                      Forma One<small>Product sheet · synthetic</small>
+                    </div>
+                    <span className="source-version">v{state?.latest?.revision || 1}</span>
+                  </div>
+                  <PriceField
+                    label="Complete price"
+                    value={evidence.formaBase}
+                    disabled={!!busy}
+                    onChange={(n) => setEvidence((e) => ({ ...e, formaBase: n }))}
+                  />
+                  <div className="included-note">
+                    <Check size={12} />
+                    All required components included
+                  </div>
+                </div>
+                <label className="note-label">
+                  Correction note
+                  <textarea
+                    value={note}
+                    disabled={!!busy}
+                    onChange={(e) => setNote(e.target.value)}
+                    maxLength={1000}
+                    rows={3}
+                  />
+                </label>
+                <div className={'impact-summary ' + (dirty ? 'has-changes' : '')}>
+                  <GitBranch size={17} />
+                  <div>
+                    {dirty ? (
+                      <>
+                        <strong>{impact?.sceneIds.length || 0} scenes will be reconsidered</strong>
+                        <span>Graph paths determine the edit.</span>
+                      </>
+                    ) : (
+                      <>
+                        <strong>All scenes match their sources</strong>
+                        <span>Update a fact to trace its impact.</span>
+                      </>
+                    )}
+                  </div>
+                </div>
+                <button
+                  className="primary-button rebuild-button"
+                  disabled={!dirty || !!busy || !note.trim()}
+                  onClick={() => void rebuild()}
+                >
+                  {busy ? <Loader2 size={17} className="spin" /> : <Scissors size={17} />}{' '}
+                  {busy ? 'Rebuilding your story…' : 'Rebuild affected scenes'}
+                  {!busy && <ArrowRight size={16} />}
+                </button>
+                <p className="under-button">Your previous cut is always preserved.</p>
+              </div>
+            ) : (
+              <div className="activity-inspector">
+                <div className="inspector-heading">
+                  <h2>
+                    {busy
+                      ? 'The edit is in motion.'
+                      : run?.status === 'complete'
+                        ? 'A new perspective.'
+                        : 'Behind the edit.'}
+                  </h2>
+                  <p>
+                    {busy
+                      ? 'Real tool calls. Live progress.'
+                      : run
+                        ? 'An inspectable record of every action.'
+                        : 'Apply a correction to watch the workflow.'}
+                  </p>
+                </div>
+                <div className="agent-mode-note">
+                  <span className={'status-dot ' + (state?.mode === 'openai' ? '' : 'neutral')} />
+                  {state?.mode === 'openai'
+                    ? 'OpenAI chooses the graph tools.'
+                    : 'Local rules · no OpenAI key configured.'}
+                </div>
+                {run ? (
+                  <>
+                    <div className="run-summary">
+                      <span>
+                        {run.status === 'running' ? (
+                          <Loader2 size={18} className="spin" />
+                        ) : run.status === 'complete' ? (
+                          <CircleCheck size={18} />
+                        ) : (
+                          <AlertCircle size={18} />
+                        )}
+                        <strong>Revision {run.revision}</strong>
+                      </span>
+                      <small>{completed} steps complete</small>
+                    </div>
+                    <div className="event-list">
+                      {run.events.map((event) => (
+                        <ActivityEvent key={event.seq} event={event} />
+                      ))}
+                    </div>
+                    {run.status !== 'running' && (
+                      <button className="secondary-button" onClick={() => setInspector('sources')}>
+                        Back to sources
+                        <ArrowRight size={14} />
+                      </button>
+                    )}
+                  </>
+                ) : (
+                  <div className="activity-empty">
+                    <GitBranch size={36} />
+                    <p>Evidence → analysis → edit → render → verify.</p>
+                    <button className="text-button" onClick={() => setInspector('sources')}>
+                      Try a source correction
+                      <ArrowRight size={14} />
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </aside>
+        </div>
+      </div>
+      {compare && state && state.versions.length > 1 && (
+        <CompareModal
+          original={state.versions[state.versions.length - 1]}
+          revised={current?.revision !== 1 ? current! : state.versions[0]}
+          close={() => setCompare(false)}
+        />
+      )}
+      {provenance && current && (
+        <ProvenanceModal version={current} scene={provenance} close={() => setProvenance(null)} />
+      )}
+    </div>
+  );
+}
+function PriceField({
+  label,
+  value,
+  onChange,
+  disabled,
+}: {
+  label: string;
+  value: number;
+  onChange: (value: number) => void;
+  disabled: boolean;
+}) {
+  return (
+    <label className="price-field">
+      <span>{label}</span>
+      <span className="price-input">
+        <span>$</span>
+        <input
+          aria-label={label}
+          type="number"
+          min="0"
+          max="10000"
+          step="0.01"
+          value={value / 100}
+          disabled={disabled}
+          onChange={(e) => {
+            const n = Number(e.target.value);
+            if (Number.isFinite(n) && n >= 0 && n <= 10000) onChange(Math.round(n * 100));
+          }}
+        />
+      </span>
+    </label>
+  );
+}
+function ActivityEvent({ event }: { event: RunEvent }) {
+  const Icon = glyphs[event.role];
+  return (
+    <div className={'event ' + event.status}>
+      <span className="event-icon">
+        {event.status === 'running' ? <Loader2 size={14} className="spin" /> : <Icon size={14} />}
+      </span>
+      <div>
+        <span className="event-role">
+          {event.role}
+          <span>
+            {new Date(event.time).toLocaleTimeString([], {
+              hour: '2-digit',
+              minute: '2-digit',
+              second: '2-digit',
+            })}
+          </span>
+        </span>
+        <h3>{event.title}</h3>
+        <p>{event.detail}</p>
+        <code>{event.tool}()</code>
       </div>
     </div>
-    {compare&&state&&state.versions.length>1&&<CompareModal original={state.versions[state.versions.length-1]} revised={current?.revision!==1?current!:state.versions[0]} close={()=>setCompare(false)}/>}
-    {provenance&&current&&<ProvenanceModal version={current} scene={provenance} close={()=>setProvenance(null)}/>}
-  </div>;
+  );
 }
-function PriceField({label,value,onChange,disabled}:{label:string;value:number;onChange:(value:number)=>void;disabled:boolean}){return <label className="price-field"><span>{label}</span><span className="price-input"><span>$</span><input aria-label={label} type="number" min="0" max="10000" step="0.01" value={value/100} disabled={disabled} onChange={e=>{const n=Number(e.target.value);if(Number.isFinite(n)&&n>=0&&n<=10000)onChange(Math.round(n*100));}}/></span></label>;}
-function ActivityEvent({event}:{event:RunEvent}){const Icon=glyphs[event.role];return <div className={'event '+event.status}><span className="event-icon">{event.status==='running'?<Loader2 size={14} className="spin"/>:<Icon size={14}/>}</span><div><span className="event-role">{event.role}<span>{new Date(event.time).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'})}</span></span><h3>{event.title}</h3><p>{event.detail}</p><code>{event.tool}()</code></div></div>;}
-function EvidenceMap({graph,impact}:{graph:EvidenceGraph;impact:Impact|null}){
-  const [selected,setSelected]=useState('fact_adapterIncluded');const [showQuery,setShowQuery]=useState(false);
-  const positions=new Map(graph.nodes.map(n=>[n.id,{x:30+n.layer*177,y:105+n.order*(n.kind==='scene'||n.kind==='fact'?95:190)}]));
-  const node=graph.nodes.find(n=>n.id===selected);
-  return <section className="graph-section"><div className="graph-heading"><div><h2>Follow the consequence.</h2><p>The paths that turn a source into a story.</p></div><span className="graph-live"><span className="status-dot"/>Live from FalkorDB</span></div><div className="graph-canvas"><svg viewBox="0 0 1100 510" role="img" aria-label="Source facts flow through calculations and claims into video scenes"><defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#a5aca2"/></marker></defs>{['SOURCES','FACTS','CALCULATIONS','CLAIMS','SCENES','OUTPUTS'].map((s,i)=><text key={s} x={30+i*177} y={43} className="graph-column">{s}</text>)}{graph.edges.map(edge=>{const a=positions.get(edge.source)!;const b=positions.get(edge.target)!;const hot=impact?.nodes.includes(edge.source)&&impact.nodes.includes(edge.target);return <path key={edge.source+edge.target} d={`M${a.x+143},${a.y+24} C${a.x+167},${a.y+24} ${b.x-24},${b.y+24} ${b.x},${b.y+24}`} className={'graph-edge '+(hot?'hot':'')} markerEnd="url(#arrow)"/>;})}{graph.nodes.map(n=>{const p=positions.get(n.id)!;return <g key={n.id} transform={`translate(${p.x},${p.y})`} role="button" tabIndex={0} aria-label={n.title} className={'graph-node '+n.kind+(impact?.nodes.includes(n.id)?' affected':'')+(selected===n.id?' picked':'')} onClick={()=>setSelected(n.id)} onKeyDown={e=>{if(e.key==='Enter'||e.key===' ')setSelected(n.id);}}><rect width="143" height="48" rx="9"/><circle cx="13" cy="24" r="3"/><text x="24" y="28">{n.title.length>22?n.title.slice(0,21)+'…':n.title}</text></g>;})}</svg></div><div className="graph-legend"><span><i className="legend-orange"/>Affected by correction</span><span><i/>Preserved</span><span>{graph.nodes.length} nodes · {graph.edges.length} relationships</span></div><div className="node-detail"><div><span className="eyebrow">{node?.kind}</span><h3>{node?.title}</h3></div><div><span>Directly feeds</span><p>{graph.edges.filter(e=>e.source===selected).map(e=>graph.nodes.find(n=>n.id===e.target)?.title).join(' · ')||'Final output — no downstream dependencies.'}</p></div></div><button className="query-toggle" onClick={()=>setShowQuery(s=>!s)}><Code2 size={15}/>Inspect the Cypher query<ChevronDown size={14}/></button>{showQuery&&<pre className="query-code">{impact?.query||'MATCH p=(f:Artifact)-[:FEEDS*1..8]->(a:Artifact)\nWHERE f.id IN $factIds\nRETURN a.id, [n IN nodes(p) | n.title]'}</pre>}</section>;
+function EvidenceMap({ graph, impact }: { graph: EvidenceGraph; impact: Impact | null }) {
+  const [selected, setSelected] = useState('fact_adapterIncluded');
+  const [showQuery, setShowQuery] = useState(false);
+  const positions = new Map(
+    graph.nodes.map((n) => [
+      n.id,
+      {
+        x: 30 + n.layer * 177,
+        y: 105 + n.order * (n.kind === 'scene' || n.kind === 'fact' ? 95 : 190),
+      },
+    ]),
+  );
+  const node = graph.nodes.find((n) => n.id === selected);
+  return (
+    <section className="graph-section">
+      <div className="graph-heading">
+        <div>
+          <h2>Follow the consequence.</h2>
+          <p>The paths that turn a source into a story.</p>
+        </div>
+        <span className="graph-live">
+          <span className="status-dot" />
+          Live from FalkorDB
+        </span>
+      </div>
+      <div className="graph-canvas">
+        <svg
+          viewBox="0 0 1100 510"
+          role="img"
+          aria-label="Source facts flow through calculations and claims into video scenes"
+        >
+          <defs>
+            <marker
+              id="arrow"
+              viewBox="0 0 10 10"
+              refX="9"
+              refY="5"
+              markerWidth="5"
+              markerHeight="5"
+              orient="auto-start-reverse"
+            >
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#a5aca2" />
+            </marker>
+          </defs>
+          {['SOURCES', 'FACTS', 'CALCULATIONS', 'CLAIMS', 'SCENES', 'OUTPUTS'].map((s, i) => (
+            <text key={s} x={30 + i * 177} y={43} className="graph-column">
+              {s}
+            </text>
+          ))}
+          {graph.edges.map((edge) => {
+            const a = positions.get(edge.source)!;
+            const b = positions.get(edge.target)!;
+            const hot = impact?.nodes.includes(edge.source) && impact.nodes.includes(edge.target);
+            return (
+              <path
+                key={edge.source + edge.target}
+                d={`M${a.x + 143},${a.y + 24} C${a.x + 167},${a.y + 24} ${b.x - 24},${b.y + 24} ${b.x},${b.y + 24}`}
+                className={'graph-edge ' + (hot ? 'hot' : '')}
+                markerEnd="url(#arrow)"
+              />
+            );
+          })}
+          {graph.nodes.map((n) => {
+            const p = positions.get(n.id)!;
+            return (
+              <g
+                key={n.id}
+                transform={`translate(${p.x},${p.y})`}
+                role="button"
+                tabIndex={0}
+                aria-label={n.title}
+                className={
+                  'graph-node ' +
+                  n.kind +
+                  (impact?.nodes.includes(n.id) ? ' affected' : '') +
+                  (selected === n.id ? ' picked' : '')
+                }
+                onClick={() => setSelected(n.id)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') setSelected(n.id);
+                }}
+              >
+                <rect width="143" height="48" rx="9" />
+                <circle cx="13" cy="24" r="3" />
+                <text x="24" y="28">
+                  {n.title.length > 22 ? n.title.slice(0, 21) + '…' : n.title}
+                </text>
+              </g>
+            );
+          })}
+        </svg>
+      </div>
+      <div className="graph-legend">
+        <span>
+          <i className="legend-orange" />
+          Affected by correction
+        </span>
+        <span>
+          <i />
+          Preserved
+        </span>
+        <span>
+          {graph.nodes.length} nodes · {graph.edges.length} relationships
+        </span>
+      </div>
+      <div className="node-detail">
+        <div>
+          <span className="eyebrow">{node?.kind}</span>
+          <h3>{node?.title}</h3>
+        </div>
+        <div>
+          <span>Directly feeds</span>
+          <p>
+            {graph.edges
+              .filter((e) => e.source === selected)
+              .map((e) => graph.nodes.find((n) => n.id === e.target)?.title)
+              .join(' · ') || 'Final output — no downstream dependencies.'}
+          </p>
+        </div>
+      </div>
+      <button className="query-toggle" onClick={() => setShowQuery((s) => !s)}>
+        <Code2 size={15} />
+        Inspect the Cypher query
+        <ChevronDown size={14} />
+      </button>
+      {showQuery && (
+        <pre className="query-code">
+          {impact?.query ||
+            'MATCH p=(f:Artifact)-[:FEEDS*1..8]->(a:Artifact)\nWHERE f.id IN $factIds\nRETURN a.id, [n IN nodes(p) | n.title]'}
+        </pre>
+      )}
+    </section>
+  );
 }
-function CompareModal({original,revised,close}:{original:Version;revised:Version;close:()=>void}){
-  const left=useRef<HTMLVideoElement>(null);const right=useRef<HTMLVideoElement>(null);
-  return <div className="modal-backdrop" onClick={close}><section className="compare-modal" role="dialog" aria-modal="true" aria-labelledby="compare-title" onClick={e=>e.stopPropagation()}><button className="modal-close" aria-label="Close comparison" onClick={close}><X size={20}/></button><div className="eyebrow">THE BEFORE / AFTER</div><h2 id="compare-title">Same story. Better evidence.</h2><p>One changed fact can change the conclusion.</p><div className="compare-grid">{[{v:original,ref:left,label:'Original cut'},{v:revised,ref:right,label:'Revised cut'}].map(({v,ref,label},i)=><div key={v.id}><div className="compare-label">{label}<span>v{v.revision}</span></div><video ref={ref} controls playsInline muted={i===0} src={v.videoUrl} poster={v.scenes[2].posterUrl}/><h3>{v.calculation.winner==='tie'?'Equal upfront cost':v.calculation.winnerName+' wins on cost'}</h3><div className="compare-costs"><span>Orbit {money(v.calculation.orbitTotal)}</span><span>Forma {money(v.calculation.formaTotal)}</span></div></div>)}</div><div className="compare-footer"><span><Check size={15}/>Opening and closing clips preserve their original hashes.</span><button className="primary-button" onClick={()=>{if(left.current&&right.current){left.current.currentTime=0;right.current.currentTime=0;void left.current.play();void right.current.play();}}}><Play size={15}/>Play both cuts</button></div></section></div>;
+function CompareModal({
+  original,
+  revised,
+  close,
+}: {
+  original: Version;
+  revised: Version;
+  close: () => void;
+}) {
+  const left = useRef<HTMLVideoElement>(null);
+  const right = useRef<HTMLVideoElement>(null);
+  return (
+    <div className="modal-backdrop" onClick={close}>
+      <section
+        className="compare-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="compare-title"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <button className="modal-close" aria-label="Close comparison" onClick={close}>
+          <X size={20} />
+        </button>
+        <div className="eyebrow">THE BEFORE / AFTER</div>
+        <h2 id="compare-title">Same story. Better evidence.</h2>
+        <p>One changed fact can change the conclusion.</p>
+        <div className="compare-grid">
+          {[
+            { v: original, ref: left, label: 'Original cut' },
+            { v: revised, ref: right, label: 'Revised cut' },
+          ].map(({ v, ref, label }, i) => (
+            <div key={v.id}>
+              <div className="compare-label">
+                {label}
+                <span>v{v.revision}</span>
+              </div>
+              <video
+                ref={ref}
+                controls
+                playsInline
+                muted={i === 0}
+                src={v.videoUrl}
+                poster={v.scenes[2].posterUrl}
+              />
+              <h3>
+                {v.calculation.winner === 'tie'
+                  ? 'Equal upfront cost'
+                  : v.calculation.winnerName + ' wins on cost'}
+              </h3>
+              <div className="compare-costs">
+                <span>Orbit {money(v.calculation.orbitTotal)}</span>
+                <span>Forma {money(v.calculation.formaTotal)}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="compare-footer">
+          <span>
+            <Check size={15} />
+            Opening and closing clips preserve their original hashes.
+          </span>
+          <button
+            className="primary-button"
+            onClick={() => {
+              if (left.current && right.current) {
+                left.current.currentTime = 0;
+                right.current.currentTime = 0;
+                void left.current.play();
+                void right.current.play();
+              }
+            }}
+          >
+            <Play size={15} />
+            Play both cuts
+          </button>
+        </div>
+      </section>
+    </div>
+  );
 }
-function ProvenanceModal({version,scene,close}:{version:Version;scene:Scene;close:()=>void}){
-  const [paths,setPaths]=useState<{ids:string[];titles:string[]}[]>([]);const [error,setError]=useState('');
-  useEffect(()=>{api<{paths:{ids:string[];titles:string[]}[]}>('/versions/'+version.id+'/provenance/'+scene.id).then(r=>setPaths(r.paths)).catch(e=>setError(e.message));},[version.id,scene.id]);
-  return <div className="modal-backdrop" onClick={close}><section className="provenance-modal" role="dialog" aria-modal="true" aria-labelledby="provenance-title" onClick={e=>e.stopPropagation()}><button className="modal-close" aria-label="Close evidence" onClick={close}><X size={20}/></button><div className="eyebrow">EVIDENCE RECEIPT / V{version.revision}</div><h2 id="provenance-title">Why does this scene say that?</h2><blockquote>{scene.narration}</blockquote><div className="evidence-receipt"><FileText size={20}/><div><strong>Source note preserved with this cut</strong><p>{version.sourceNote}</p></div></div><div className="receipt-numbers"><span>Orbit base <strong>{money(version.evidence.orbitBase)}</strong></span><span>Adapter <strong>{version.evidence.adapterIncluded?'Included':money(version.evidence.orbitAdapter)}</strong></span><span>Forma total <strong>{money(version.evidence.formaBase)}</strong></span></div>{error&&<p role="alert">{error}</p>}{paths.length?<div className="receipt-paths">{paths.map((p,i)=><div key={i}>{p.titles.map((title,j)=><span key={j}>{j>0&&<ChevronRight size={12}/>}<b>{title}</b></span>)}</div>)}</div>:<p className="muted">This scene frames the comparison and makes no price claim.</p>}<div className="receipt-footer"><GitBranch size={14}/>Paths queried from FalkorDB · source snapshot is immutable</div></section></div>;
+function ProvenanceModal({
+  version,
+  scene,
+  close,
+}: {
+  version: Version;
+  scene: Scene;
+  close: () => void;
+}) {
+  const [paths, setPaths] = useState<{ ids: string[]; titles: string[] }[]>([]);
+  const [error, setError] = useState('');
+  useEffect(() => {
+    api<{ paths: { ids: string[]; titles: string[] }[] }>(
+      '/versions/' + version.id + '/provenance/' + scene.id,
+    )
+      .then((r) => setPaths(r.paths))
+      .catch((e) => setError(e.message));
+  }, [version.id, scene.id]);
+  return (
+    <div className="modal-backdrop" onClick={close}>
+      <section
+        className="provenance-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="provenance-title"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <button className="modal-close" aria-label="Close evidence" onClick={close}>
+          <X size={20} />
+        </button>
+        <div className="eyebrow">EVIDENCE RECEIPT / V{version.revision}</div>
+        <h2 id="provenance-title">Why does this scene say that?</h2>
+        <blockquote>{scene.narration}</blockquote>
+        <div className="evidence-receipt">
+          <FileText size={20} />
+          <div>
+            <strong>Source note preserved with this cut</strong>
+            <p>{version.sourceNote}</p>
+          </div>
+        </div>
+        <div className="receipt-numbers">
+          <span>
+            Orbit base <strong>{money(version.evidence.orbitBase)}</strong>
+          </span>
+          <span>
+            Adapter{' '}
+            <strong>
+              {version.evidence.adapterIncluded ? 'Included' : money(version.evidence.orbitAdapter)}
+            </strong>
+          </span>
+          <span>
+            Forma total <strong>{money(version.evidence.formaBase)}</strong>
+          </span>
+        </div>
+        {error && <p role="alert">{error}</p>}
+        {paths.length ? (
+          <div className="receipt-paths">
+            {paths.map((p, i) => (
+              <div key={i}>
+                {p.titles.map((title, j) => (
+                  <span key={j}>
+                    {j > 0 && <ChevronRight size={12} />}
+                    <b>{title}</b>
+                  </span>
+                ))}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="muted">This scene frames the comparison and makes no price claim.</p>
+        )}
+        <div className="receipt-footer">
+          <GitBranch size={14} />
+          Paths queried from FalkorDB · source snapshot is immutable
+        </div>
+      </section>
+    </div>
+  );
 }

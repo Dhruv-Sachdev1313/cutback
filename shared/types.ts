@@ -25,6 +25,7 @@ export type Scene = {
   videoUrl: string;
   posterUrl: string;
   audioUrl: string;
+  /** Media differs from the preceding cut, including restoration from cache. */
   rebuilt: boolean;
   citedFacts: string[];
 };
