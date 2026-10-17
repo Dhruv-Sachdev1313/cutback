@@ -1,31 +1,32 @@
 name: cutback
 services:
   falkordb:
-    image: falkordb/falkordb:latest
+    image: falkordb/falkordb@sha256:b0bdcac2cbaff989e77cb0610439b7a9289e86de033ccbbd4368b66fb680ae7a
     ports:
-      - "127.0.0.1:6387:6379"
-      - "127.0.0.1:6388:3000"
+      - '127.0.0.1:6387:6379'
+      - '127.0.0.1:6388:3000'
     environment:
-      REDIS_ARGS: "--appendonly yes"
-      FALKORDB_ARGS: "THREAD_COUNT 2"
+      REDIS_ARGS: '--appendonly yes'
+      FALKORDB_ARGS: 'THREAD_COUNT 2'
     volumes:
       - graph-data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ['CMD', 'redis-cli', 'ping']
       interval: 5s
       timeout: 3s
       retries: 20
   app:
-    profiles: ["full"]
+    profiles: ['full']
     build: .
     ports:
-      - "127.0.0.1:4318:4318"
+      - '127.0.0.1:4318:4318'
     env_file:
       - path: .env
         required: false
     environment:
       FALKORDB_HOST: falkordb
       FALKORDB_PORT: 6379
+      FALKORDB_GRAPH: ${CUTBACK_DOCKER_GRAPH:-cutback_docker}
       HOST: 0.0.0.0
       FFMPEG_PATH: /usr/bin/ffmpeg
     volumes:
