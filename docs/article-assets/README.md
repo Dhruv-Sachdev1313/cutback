@@ -2,6 +2,32 @@
 
 These PNGs are captures of the working local application. They contain synthetic product data.
 
+## Current upload article
+
+The article in `docs/building-cutback.md` uses these images:
+
+- `upload-cost-comparison.png`: actual original and revised MP4 frames showing the $79-to-$128 total change.
+- `upload-start.png`: a fresh form with the bundled video and original source file selected, before analysis.
+- `upload-facts.png`: the completed fresh upload's seven extracted facts and their evidence.
+- `upload-falkordb.png`: the real adapter-impact query in FalkorDB Browser. This run uses fact `f3` and reaches three scenes through four paths. The article explains the extra closing-scene link.
+- `upload-verdict-comparison.png`: original Orbit and revised Forma verdicts from the actual MP4s.
+
+`upload-graph.png` is an additional screenshot of the graph inside CUTBACK.
+
+To refresh the current images with the upload studio on port 4328 and Browser on 6398:
+
+```sh
+node scripts/upload-article-screenshots.mjs
+```
+
+The script selects the latest completed speaker-film project with an integrated export. Use `CUTBACK_PROJECT_ID` to choose a specific project. It fills the upload form without submitting it, opens a saved project, plays its existing exports, and executes a read-only Browser query. It blocks mutations to the application API and checks that the project and local spending estimate remain unchanged. No new analysis, agent plan, or render is requested.
+
+The captures used for this revision came from a fresh upload with live OpenAI API and MCP activity. They are not from the earlier Local rules demo. If regenerating them from another run, check the article's fact ID, counts, and captions against that run.
+
+## Earlier authored demo
+
+The following images remain as records of the earlier interface and graph model. The current article does not use them.
+
 - `studio.png`: the redesigned studio with the standard adapter correction applied.
 - `dependency-map.png`: a preview of changing the adapter-inclusion fact, showing the affected graph paths. No revision is submitted during this capture.
 - `compare-verdicts.png`: decoded frames from the original and revised MP4s.

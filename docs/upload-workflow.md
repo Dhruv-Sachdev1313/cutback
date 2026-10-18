@@ -1,6 +1,6 @@
 # Record CUTBACK from an empty project
 
-Use **http://127.0.0.1:4328** on branch `feat/video-intake-chatgpt`. Your original demo stays at **http://localhost:4318**.
+Use **http://127.0.0.1:4328** for the upload studio on `main`. Your original demo stays at **http://localhost:4318**.
 
 ## Prepare the recording
 

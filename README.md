@@ -4,7 +4,9 @@ Upload a video and its source material. When a fact changes, CUTBACK follows an 
 
 **Graph Hacks track: Agents That Act on Connected Data (Track 1).**
 
-Branch `feat/video-intake-chatgpt` opens on an empty project. There is no preloaded graph or generated video. Previous uploads live behind **Projects**, with separate graphs and histories. The [earlier authored demo](docs/authored-demo.md) remains available separately.
+The upload studio opens on an empty project. There is no preloaded graph or generated video. Previous uploads live behind **Projects**, with separate graphs and histories. The [earlier authored demo](docs/authored-demo.md) remains available separately.
+
+[Read the development article: I built CUTBACK to fix a video without recording it all again](docs/building-cutback.md).
 
 ## Run locally
 
@@ -72,7 +74,7 @@ RETURN s.id AS id, [n IN nodes(p) | n.title] AS path
 
 The returned scene IDs are the allowed edit scope. The server rejects plans that omit an affected scene or add an unrelated one. It queries the graph again before rendering. Changing an edge changes the permitted edit set; the graph is not a display of an independently chosen list.
 
-The agent discovers `trace_impact`, `read_affected_scenes`, `calculate`, and `submit_edit_plan` through a real MCP client/server connection with in-process transport. Numeric comparisons use the calculator. Arbitrary replacement prose still needs human review; this branch does not claim the earlier template's deterministic factual compiler for arbitrary uploads.
+The agent discovers `trace_impact`, `read_affected_scenes`, `calculate`, and `submit_edit_plan` through a real MCP client/server connection with in-process transport. Numeric comparisons use the calculator. The speaker film's editable layout compiles its numbers and script deterministically. Arbitrary replacement prose still needs human review.
 
 Sources come from timestamped speech, sampled frames, and supplied text. Speech and document quotations must match an actual passage. Frame readings and dependency links need human review. A citation establishes where a claim came from, not whether it is true. TXT, Markdown, and CSV files are supported. URLs are attribution only; the app does not fetch them or ingest PDFs. Use public, synthetic, or your own permitted material. The included film and product sheets are fictional demo assets.
 
