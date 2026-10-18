@@ -83,7 +83,24 @@ try {
           else v.addEventListener('loadedmetadata', resolve, { once: true });
         }),
     );
-  await page.waitForTimeout(6500);
+  const comparison = await fetch(base + '/api/state').then((r) => r.json());
+  await page.getByRole('button', { name: 'Play both cuts' }).click();
+  const comparedVersions = [comparison.versions.at(-1), comparison.latest];
+  for (let i = 0; i < comparedVersions.length; i++) {
+    const start = comparedVersions[i].scenes.slice(0, 2).reduce((n, s) => n + s.duration, 0) + 0.35;
+    await page
+      .locator('.compare-grid video')
+      .nth(i)
+      .evaluate((v, time) => {
+        v.muted = true;
+        v.currentTime = time;
+      }, start);
+  }
+  await page.waitForTimeout(3500);
+  await page
+    .locator('.compare-grid video')
+    .evaluateAll((videos) => videos.forEach((v) => v.pause()));
+  await page.waitForTimeout(1500);
   await page.getByRole('button', { name: 'Close comparison' }).click();
   await page.getByRole('tab', { name: 'History', exact: true }).click();
   await page.waitForTimeout(3000);

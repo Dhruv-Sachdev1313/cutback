@@ -442,7 +442,7 @@ export function App() {
                       key={current.id}
                       controls
                       playsInline
-                      preload="metadata"
+                      preload="auto"
                       poster={current.scenes[sceneId === 'verdict' ? 2 : 0].posterUrl}
                       src={current.videoUrl}
                       onLoadedMetadata={() => {
@@ -1073,9 +1073,14 @@ function CompareModal({
                 ref={ref}
                 controls
                 playsInline
+                preload="auto"
                 muted={i === 0}
                 src={v.videoUrl}
                 poster={v.scenes[2].posterUrl}
+                onLoadedMetadata={(event) => {
+                  event.currentTarget.currentTime =
+                    v.scenes.slice(0, 2).reduce((n, s) => n + s.duration, 0) + 0.35;
+                }}
               />
               <h3>
                 {v.calculation.winner === 'tie'
