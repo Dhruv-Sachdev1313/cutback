@@ -1,175 +1,107 @@
 # CUTBACK
 
-**A finished video that revises its argument when its evidence changes.**
+Upload a video and its source material. When a fact changes, CUTBACK follows an evidence graph to find the scenes that depend on it, proposes replacement narration, and exports a corrected video.
 
-Change a source fact. An agent follows the dependency graph, recalculates the comparison, identifies affected scenes, and produces a revised video with narration, charts, and captions. Every version keeps its original evidence and tool trace.
+**Graph Hacks track: Agents That Act on Connected Data (Track 1).**
 
-**Graph Hacks submission track: Agents That Act on Connected Data (Track 1).**
-
-## The working demo
-
-The film compares two fictional speakers. Orbit Mini originally costs **$79**, including its required adapter. Forma One costs **$119**, complete. The original video recommends Orbit on upfront cost.
-
-Correct one fact: Orbit's adapter is actually sold separately for **$49**. Its complete cost becomes **$128**. The agent traces the consequences and revises the conclusion: Forma now costs **$9 less**.
-
-Only the cost and verdict scenes change. The opening and closing reuse their exact original media files. The studio includes the source editor, interactive evidence map, live tool trace, before/after player, evidence receipts, immutable version history, MP4 export, and SRT captions.
-
-Try an adapter price of **$40** for a tie or **$20** to keep Orbit cheaper. The result is calculated from your input.
+Branch `feat/video-intake-chatgpt` opens on an empty project. There is no preloaded graph or generated video. Previous uploads live behind **Projects**, with separate graphs and histories. The [earlier authored demo](docs/authored-demo.md) remains available separately.
 
 ## Run locally
 
-Requirements: **Node.js 22.12+**, **Docker**, and speech support (`say` on macOS, `espeak-ng` on Linux). FFmpeg is installed with npm dependencies. Fonts and illustrations are bundled locally.
+Requirements: Node.js 22.12+, Docker, [uv](https://docs.astral.sh/uv/), and local speech synthesis (`say` on macOS or `espeak-ng` on Linux). FFmpeg and FFprobe come with npm dependencies. The upload setup has been tested natively on macOS; it does not use the older app's Docker image.
 
 ```sh
-cp .env.example .env
 npm ci
-npm run db:up
-npm run dev
+cp .env.upload.example .env.upload
+npm run upload:db
+npm run upload:setup-transcription
+npm run upload:build
+npm run upload:start
 ```
 
-Open **http://localhost:4317**. The first cut renders automatically. FalkorDB's browser is available at **http://localhost:6388**; the database port is **6387**.
+Open **http://127.0.0.1:4328**. Set `OPENAI_API_KEY` in `.env.upload` before starting for API mode, or use **Continue with ChatGPT** in connection settings. The first transcription downloads Whisper `base.en`; later uploads reuse the local model.
 
-To run the built app on a single port:
+| Component        | Upload branch      | Original authored demo |
+| ---------------- | ------------------ | ---------------------- |
+| App              | 4328               | 4318                   |
+| FalkorDB         | 6397               | 6387                   |
+| FalkorDB Browser | 6398               | 6388                   |
+| Compose project  | `cutback-upload`   | `cutback`              |
+| Local data       | `.cutback-upload/` | `.cutback/`            |
+| Environment file | `.env.upload`      | `.env`                 |
 
-```sh
-npm run build
-npm start
-```
+The upload app refuses the original demo's app and database ports. It has its own Docker volume. Starting it does not require stopping the original demo.
 
-Open **http://localhost:4318**.
+## Try a complete project
 
-### OpenAI agent
+1. Choose **New project** and upload [`demo-kit/speaker-comparison.mp4`](demo-kit/speaker-comparison.mp4).
+2. Attach [`demo-kit/original-sources.txt`](demo-kit/original-sources.txt). These synthetic product sheets match the original film. Do not supply the correction yet.
+3. Choose **Upload & analyse video**. Local transcription produces timestamps; the model receives speech, sampled frames, and your source text. It proposes facts and dependencies.
+4. Check the quoted passages and scene connections. Open **Dependency graph**, then approve the graph after reviewing it.
+5. Select the fact saying Orbit's required adapter is included. Enter: **Orbit Mini's required power adapter is not included in its $79 speaker price. It must be bought separately for $49.** Paste [`demo-kit/correction-source.txt`](demo-kit/correction-source.txt) into the correction source field.
+6. Choose **Trace impact & propose edits**. Check the graph paths and narration: Orbit now costs $128; Forma remains $119, making it $9 cheaper on upfront cost.
+7. Choose **Approve plan & render video**, then **Jump to first correction**. Compare the cuts and download the MP4 and SRT captions.
 
-Add your key to the ignored `.env` file, then restart the API:
+The checked live run extracted six facts, six claims, and three segments. It revised two segments and preserved one. Fresh model runs can produce different wording and counts; review the actual result.
 
-```dotenv
-OPENAI_API_KEY=your_key_here
-OPENAI_MODEL=gpt-6-astra
-AGENT_MODE=openai
-```
+Affected segments become labelled **correction cards with synthetic narration**. Unaffected segments retain their uploaded footage and audio, normalized for export. CUTBACK does not alter a filmed speaker's lips or voice. Each export applies one correction to the original upload; corrections are not cumulative.
 
-The UI should say **OpenAI agent**. Model choice is configurable for your API account. The backend uses the Responses API; no key is sent to the browser. OpenAI errors are shown as failed runs and preserve the prior cut.
+[Detailed walkthrough, FalkorDB Browser queries, and two-minute recording script](docs/upload-workflow.md).
 
-Default `AGENT_MODE=auto` uses OpenAI when a key exists; otherwise the UI explicitly reports **Local rules mode**. Local mode runs real MCP, FalkorDB queries, speech synthesis, and FFmpeg rendering with a deterministic editorial plan. It is not an LLM simulation. Use `AGENT_MODE=openai` for an AI-agent submission recording.
-
-Speech is local by default. For OpenAI-generated narration:
-
-```dotenv
-TTS_PROVIDER=openai
-OPENAI_TTS_MODEL=gpt-4o-mini-tts
-OPENAI_TTS_VOICE=coral
-```
-
-Narration is synthetic in either mode.
-
-### Entire application in Docker
-
-```sh
-cp .env.example .env
-# Add your API key to .env if using OpenAI.
-docker compose --profile full up --build -d
-```
-
-Open **http://localhost:4318**. The image includes FFmpeg, Linux speech synthesis, and fonts. The app and database retain their data in named volumes. This is also the recommended local setup on Windows. The containers bind to loopback on the host.
-
-The Docker app uses a separate graph (`cutback_docker`) because its rendered media lives in a separate volume. Native and Docker runs each keep their own history. Override `CUTBACK_DOCKER_GRAPH` only with a matching media volume.
-
-Stop without deleting history:
-
-```sh
-docker compose --profile full stop
-```
-
-## Why FalkorDB is central
+## FalkorDB and the agent
 
 ```text
-Source → Fact → Calculation → Claim → Scene → Rendered assets
+Source ─CONTAINS→ Evidence ─SUPPORTS→ Fact ─SUPPORTS→ Claim ─APPEARS_IN→ Scene
+Correction ─CORRECTS→ Fact
+Revision ─APPLIES→ Correction
+Revision ─REBUILDS→ Scene
 ```
 
-The editorial tools read candidate facts and traverse dependency paths directly in FalkorDB. The graph determines the set of scenes allowed in the edit plan. The application cannot analyze or publish a revision without the graph; the media directory only caches generated assets.
+Every upload has its own graph: `cutback_import_<project UUID without hyphens>`. The `cutback_upload_index` graph lists projects. Project records, evidence, dependencies, corrections, and export receipts persist in FalkorDB. The filesystem holds media, the spending estimate, and private sign-in credentials.
 
-The key traversal:
+The agent's `trace_impact` tool runs a parameterized traversal:
 
 ```cypher
-MATCH p=(f:Artifact)-[:FEEDS*1..8]->(a:Artifact)
-WHERE f.id IN $factIds
-RETURN DISTINCT a.id AS id, a.kind AS kind,
-  [n IN nodes(p) | n.id] AS pathIds,
-  [n IN nodes(p) | n.title] AS pathTitles
+MATCH p=(f:Fact {id:$factId})-[:SUPPORTS|APPEARS_IN*1..4]->(s:Scene)
+RETURN s.id AS id, [n IN nodes(p) | n.title] AS path
 ```
 
-- [Complete graph model](docs/graph-model.md)
-- [Essential Cypher queries](docs/queries.cypher)
-- [Queries for the FalkorDB Browser demonstration](docs/falkordb-browser.cypher)
-- [Architecture and scope](docs/architecture.md)
-- [Recording script and demo challenge](docs/demo.md)
-- [Build story with screenshots and debugging notes](docs/building-cutback.md)
+The returned scene IDs are the allowed edit scope. The server rejects plans that omit an affected scene or add an unrelated one. It queries the graph again before rendering. Changing an edge changes the permitted edit set; the graph is not a display of an independently chosen list.
 
-## Agent and MCP tools
+The agent discovers `trace_impact`, `read_affected_scenes`, `calculate`, and `submit_edit_plan` through a real MCP client/server connection with in-process transport. Numeric comparisons use the calculator. Arbitrary replacement prose still needs human review; this branch does not claim the earlier template's deterministic factual compiler for arbitrary uploads.
 
-The OpenAI agent discovers and calls `trace_impact`, `calculate_costs`, `read_scene`, and `submit_edit_plan` through an MCP client/server pair. Its plan must match both the graph traversal and deterministic arithmetic. A factual compiler fills the selected narration and visual templates with verified figures. The agent cannot introduce unsupported product-performance claims.
+Sources come from timestamped speech, sampled frames, and supplied text. Speech and document quotations must match an actual passage. Frame readings and dependency links need human review. A citation establishes where a claim came from, not whether it is true. TXT, Markdown, and CSV files are supported. URLs are attribution only; the app does not fetch them or ingest PDFs. Use public, synthetic, or your own permitted material. The included film and product sheets are fictional demo assets.
 
-For an external MCP client, run:
+## API credit and ChatGPT
 
-```sh
-npm run mcp
-```
+API mode uses GPT-6.1 Sol, a 6,000-output-token limit per request, and at most five model turns for a correction plan. Transcription, narration, and rendering run locally. There are no automatic model retries. Only analysis and planning call the model; browsing, approval, playback, and rendering do not.
 
-Stdio server configuration example (replace the absolute project path):
+`UPLOAD_API_BUDGET_USD=1.00` sets a local allowance, persisted across restarts. The app reserves a conservative estimate before a request, then accounts for reported usage. Failed requests retain their reservation when usage is unknown. This is an application guard, not an account balance or guaranteed billing cap. Provider billing is authoritative. The verified upload and correction test recorded an estimate of about **$0.04**; other inputs can cost more.
 
-```json
-{
-  "mcpServers": {
-    "cutback": {
-      "command": "node",
-      "args": ["--import", "tsx", "server/mcp.ts"],
-      "cwd": "/absolute/path/to/cutback"
-    }
-  }
-}
-```
+The ChatGPT option implements the official [Sign in with ChatGPT flow for open-source apps](https://developers.openai.com/siwc/token-sharing-open-source/sign-in): loopback OAuth, PKCE, state and signed ID-token checks, saved registrations, serialized token refresh, model discovery, and streaming Responses requests. Tokens stay in `.cutback-upload/chatgpt-credentials.json` with owner-only permissions. They are never sent to the frontend or committed.
 
-Exposed tools: `get_current_cut`, `trace_source_change`, `get_scene_provenance`, `apply_source_correction`. The application API must be running for the mutation tool.
+An eligible account must grant plan usage. A subscription error stops the job and never falls back to API credit. OAuth and request handling have automated fixture tests. Live subscription inference still requires the user's sign-in and account eligibility; the completed end-to-end demo was verified using API credit.
 
 ## Verification
 
 ```sh
-npm test                 # Arithmetic, tie handling, plan constraints, captions, real MCP transport
-npm run test:integration # Real FalkorDB traversal, changed-edge behavior, concurrent revision locking
-npm run build            # TypeScript + production frontend build
-npm run test:browser     # Running app required; Chrome by default
+npm test                          # Unit tests; model and OAuth responses mocked
+npm run test:upload-integration    # Real isolated FalkorDB + MCP; no paid inference
+npm run upload:build              # TypeScript + production frontend
+npm run test:upload-browser        # Running upload app; read-only UI checks
 ```
 
-Browser QA performs the real correction workflow and verifies the new winner, generated media hashes, comparison playback, history, and mobile layout. It saves screenshots and a JSON report to ignored `artifacts/`. It creates real revisions in the local demo project.
+The integration test is restricted to port 6397 and deletes only its uniquely named fixtures. The browser check opens an existing completed project if available, then verifies that **New project** clears the interface. It never starts analysis or rendering. The older `test:browser` script creates revisions in the authored demo; use `test:upload-browser` here.
 
-If Chrome is unavailable, install Playwright's Chromium and choose it using `PLAYWRIGHT_CHANNEL=chromium npm run test:browser`.
+| Files                                            | Responsibility                                     |
+| ------------------------------------------------ | -------------------------------------------------- |
+| `server/upload/index.ts`, `config.ts`            | Isolated local API, upload limits, request checks  |
+| `server/upload/store.ts`                         | Graph creation, impact traversal, receipts         |
+| `server/upload/pipeline.ts`, `schema.ts`         | Extraction review, MCP loop, edit scope validation |
+| `server/upload/media.ts`                         | Segments, frames, speech, MP4 and captions         |
+| `server/upload/auth.ts`, `model.ts`, `budget.ts` | OAuth, model requests, spending allowance          |
+| `src/UploadApp.tsx`, `src/upload.css`            | Upload, evidence review, correction and comparison |
+| `scripts/transcribe-local.py`                    | Local English transcription                        |
+| `demo-kit/`                                      | Synthetic film and source sheets                   |
 
-To record the real UI workflow and export both narrated films, see the [recording guide](docs/demo.md). The recorder creates actual revisions and labels the configured editorial mode.
-
-## Project layout
-
-```text
-src/                    React studio and responsive UI
-shared/                 Shared API types
-server/agent.ts         OpenAI editorial tool loop
-server/tool-session.ts  MCP discovery and per-revision tool transport
-server/store.ts         FalkorDB queries, versioning, revision locks
-server/graph-model.ts   Dependency topology and traversal queries
-server/story.ts         Source validation, arithmetic, factual script compiler
-server/visuals.ts       Original SVG scene illustrations
-server/render.ts        Narration, content-addressed clips, MP4 + SRT export
-server/pipeline.ts      Workflow, verification, progress events, publication
-server/mcp.ts           External stdio MCP server
-docs/                  Architecture, graph model, Cypher, recording guide
-examples/               Synthetic source fixtures (USD cents)
-tests/                  Unit and real-database tests
-.cutback/media/         Generated files; ignored by Git
-```
-
-## Deliberate scope
-
-This is a local, single-project prototype with one authored comparison template and structured evidence fields. It does not ingest arbitrary films or documents. The first cut is authored; corrections use the configured editorial mode. Caption timing is estimated per cue, not word-aligned. Unfinished runs are marked failed after a server restart; the last published cut remains available.
-
-All products, source sheets, and prices are synthetic. Illustrations are original SVG assets. Fonts use their bundled open-source licenses. No personal, login-protected, or restricted source data is loaded.
-
-The Git repository is local until you choose a remote and publish it. The hackathon submission also needs your working demo video link and your own review and understanding of the implementation.
+Current scope: local single-user app, English speech, videos of 2–120 seconds and at most 100 MB. Scene boundaries and dependency extraction are approximate. Caption timing is estimated within segments. There is no frame-perfect editing. A restart interrupts active jobs and preserves completed exports. Refresh the page afterwards; restart ChatGPT sign-in if it was interrupted.
