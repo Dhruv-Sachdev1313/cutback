@@ -2,6 +2,35 @@
 
 Target length: two minutes, including clicks and a few seconds of playback. Use the built app at `http://localhost:4318` and a 1440×1000 browser window. The actual rendered films are downloadable MP4s with narration.
 
+## Using the application from the beginning
+
+The current application starts with a built-in speaker-comparison video. It does **not** have a video-upload screen or analyse arbitrary MP4s. The initial video, scene boundaries, and dependency graph are authored as part of this prototype. Its working flow is: open the existing video, correct a source fact, inspect the affected scenes, rebuild, compare, and export.
+
+| Control                            | What it does                                                           |
+| ---------------------------------- | ---------------------------------------------------------------------- |
+| **Studio**                         | Plays the selected video and shows its four scene cards and narration. |
+| **Sources**, in the right sidebar  | Edits the structured facts used by the video.                          |
+| **Activity**, in the right sidebar | Shows the agent's tool calls and rendering progress.                   |
+| **Evidence**                       | Shows the dependency graph and highlights the affected paths.          |
+| **History**                        | Opens earlier saved cuts and downloads their captions.                 |
+| **Compare cuts**                   | Shows the original-price cut beside the selected revision.             |
+| **Export**                         | Downloads the selected video as an MP4.                                |
+
+1. Open **http://localhost:4318** and select **Studio**. The top bar should show **Graph connected** and **OpenAI agent**.
+2. Prepare the original example. If **Sources → Adapter included** is off, click the circular-arrow button beside the project title. Its tooltip is **Restore original source values**. Then click **Rebuild affected scenes** at the bottom of the right sidebar and wait for completion. Restoring the inputs alone does not change the saved video. Skip this rebuild if the original values are already active.
+3. Play the original video. Click its first scene card to seek to the beginning, or select the cost and verdict scenes to inspect those parts directly. Orbit should cost **$79**, Forma **$119**, and Orbit should be **$40 cheaper**.
+4. In the right sidebar, select **Sources**, then click **Load the correction**. This turns **Adapter included** off. Orbit's speaker price stays **$79**, its required adapter stays **$49**, and Forma's complete price stays **$119**. The video has not changed yet; these are proposed source edits.
+5. Select **Evidence** to inspect the highlighted paths. The correction reaches the cost and verdict scenes. In **Studio**, those two scene cards should say **Will update**. The preview only queries FalkorDB; it does not start an OpenAI revision.
+6. Click **Rebuild affected scenes** in the right sidebar. The app opens **Activity** and shows the agent inspecting the graph, calculating costs, reading scenes, and submitting an edit plan, followed by rendering. Wait for **Revision complete**. Each rebuild in OpenAI mode makes paid API calls.
+7. In **Studio**, select the verdict scene and play it. Orbit now costs **$128** and Forma costs **$119**. Forma is **$9 cheaper**. The cost and verdict scenes should show **Updated**, while the opening and closing show **Preserved**.
+8. Click **Compare cuts**, then **Play both cuts** to compare the recommendations. Close the comparison when finished.
+9. Select a cost or verdict scene, then click **linked facts · inspect evidence** under its narration. This opens the facts and dependency paths behind that scene. Select **History → Open cut** to revisit an earlier version. Viewing history does not replace the latest source values being edited in the right sidebar.
+10. Return to the latest cut through **History → Open cut**, then click **Export** to download its MP4. Use **History → Download captions** for the SRT file.
+
+The **Correction note** records why a revision was made. Typing a request there does not change the facts automatically; edit the price fields or inclusion switch as well. **Rebuild affected scenes** is disabled until at least one fact differs from the latest cut and the note is nonempty. If **Load the correction** produces no change, the latest cut already excludes the adapter; restore and rebuild the original values first.
+
+For the current demo, introduce it as: “This is a prepared video with its source facts already linked. I’m going to correct one fact and show how CUTBACK revises the video.” An upload-first demo needs an implemented import and analysis workflow before it can be presented as a working capability.
+
 ## Before recording
 
 1. Configure OpenAI locally using the settings below, restart the API, and confirm the studio badge says **OpenAI agent**. Do not show the `.env` contents in the recording. Complete one real revision before filming; the badge alone does not verify model access.
