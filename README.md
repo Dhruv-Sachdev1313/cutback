@@ -102,6 +102,7 @@ RETURN DISTINCT a.id AS id, a.kind AS kind,
 - [Essential Cypher queries](docs/queries.cypher)
 - [Architecture and scope](docs/architecture.md)
 - [Recording script and demo challenge](docs/demo.md)
+- [Build story with screenshots and debugging notes](docs/building-cutback.md)
 
 ## Agent and MCP tools
 
