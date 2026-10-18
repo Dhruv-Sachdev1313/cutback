@@ -20,7 +20,6 @@ import {
   Play,
   RotateCcw,
   Scissors,
-  Sparkles,
   X,
   AlertCircle,
 } from 'lucide-react';
@@ -237,85 +236,28 @@ export function App() {
   const showImpact = dirty ? impact : run?.impact;
   return (
     <div className="app-shell">
-      <aside className="sidebar">
-        <a className="brand" href="/" aria-label="CUTBACK home">
-          <span className="brand-mark">
-            <i />
-            <i />
-          </span>
-          CUTBACK<span className="brand-dot">®</span>
-        </a>
-        <div className="workspace-label">
-          <span className="avatar">D</span>
-          <span>
-            Your workspace<small>Creator studio</small>
-          </span>
-          <ChevronDown size={14} />
-        </div>
-        <div className="nav-caption">WORKSPACE</div>
-        <nav aria-label="Workspace">
-          <button
-            className={view === 'studio' ? 'nav-item active' : 'nav-item'}
-            onClick={() => setView('studio')}
-          >
-            <Clapperboard size={18} />
-            The living edit<span className="nav-count">1</span>
-          </button>
-          <button
-            className={view === 'graph' ? 'nav-item active' : 'nav-item'}
-            onClick={() => setView('graph')}
-          >
-            <GitBranch size={18} />
-            Evidence map
-          </button>
-          <button
-            className={view === 'history' ? 'nav-item active' : 'nav-item'}
-            onClick={() => setView('history')}
-          >
-            <History size={18} />
-            Version history
-            {state && state.versions.length > 1 && (
-              <span className="nav-count">{state.versions.length}</span>
-            )}
-          </button>
-        </nav>
-        <div className="sidebar-rule" />
-        <div className="nav-caption">CURRENT PROJECT</div>
-        <div className="project-mini">
-          <span className="project-tile">
-            <AudioLines size={21} />
-          </span>
-          <span>
-            The speaker test<small>Field notes / 001</small>
-          </span>
-        </div>
-        <div className="sidebar-bottom">
-          <div className="small-statement">
-            Facts change.
-            <br />
-            <em>Stories should, too.</em>
-          </div>
-          <div className="database-badge">
-            <span className={state?.graphConnected ? 'status-dot' : 'status-dot offline'} />
-            {state?.graphConnected ? 'FalkorDB connected' : 'Connecting to FalkorDB'}
-            <GitBranch size={12} />
-          </div>
-          <span className="build-label">GRAPH HACKS · TRACK 01</span>
-        </div>
-      </aside>
       <div className="workspace-main">
         <header className="topbar">
+          <a className="brand" href="/" aria-label="CUTBACK home">
+            <span className="brand-mark">
+              <i />
+              <i />
+            </span>
+            CUTBACK<span className="brand-edition">EDIT ROOM / 01</span>
+          </a>
           <div className="breadcrumbs">
-            Workspace
-            <ChevronRight size={13} />
-            <span>Field notes 001</span>
+            <span>Speaker comparison</span>
+            <span className="project-file">speaker-test.cut</span>
           </div>
           <div className="topbar-right">
+            <span className="database-badge">
+              <span className={state?.graphConnected ? 'status-dot' : 'status-dot offline'} />
+              {state?.graphConnected ? 'Graph connected' : 'Graph offline'}
+            </span>
             <span className="mode-pill">
               <span className={'status-dot ' + (state?.mode === 'openai' ? '' : 'neutral')} />
               {state?.mode === 'openai' ? 'OpenAI agent' : 'Local rules mode'}
             </span>
-            <span className="profile">D</span>
           </div>
         </header>
         <div className="workspace-grid">
@@ -323,11 +265,10 @@ export function App() {
             <div className="project-heading">
               <div>
                 <div className="eyebrow">
-                  <span />
-                  THE LIVING EDIT
+                  PROJECT 001 <span className="heading-divider">/</span> COST COMPARISON
                 </div>
                 <h1>The everyday speaker test</h1>
-                <p>An evidence-linked film. Always open to a better answer.</p>
+                <p>Four scenes. Two products. Every price traced to its source.</p>
               </div>
               <div className="heading-actions">
                 <button
@@ -406,13 +347,13 @@ export function App() {
                 {current && previousCut && (
                   <div className="revision-reveal">
                     <span className="reveal-icon">
-                      <Sparkles size={17} />
+                      <Scissors size={17} />
                     </span>
                     <div>
                       <small>
                         {current.calculation.winner !== previousCut.calculation.winner
-                          ? 'THE CONCLUSION CHANGED'
-                          : 'THE STORY IS UP TO DATE'}
+                          ? 'VERDICT CHANGED'
+                          : 'CUT VERIFIED'}
                       </small>
                       <strong>
                         {current.calculation.winner !== previousCut.calculation.winner && (
@@ -435,6 +376,16 @@ export function App() {
                     </span>
                   </div>
                 )}
+                <div className="monitor-label">
+                  <span>
+                    <span className="monitor-dot" />
+                    PROGRAM MONITOR
+                  </span>
+                  <span>
+                    {current ? 'V' + String(current.revision).padStart(2, '0') : '—'} / 1280 × 720 /
+                    24 FPS
+                  </span>
+                </div>
                 <div className="player-frame">
                   {current ? (
                     <video
@@ -469,8 +420,8 @@ export function App() {
                         <i />
                         <i />
                       </span>
-                      <h2>Your first cut is taking shape.</h2>
-                      <p>Connecting the evidence. Composing the story.</p>
+                      <h2>Rendering the first cut</h2>
+                      <p>Loading sources and assembling four scenes.</p>
                       <Loader2 className="spin" size={23} />
                     </div>
                   )}
@@ -495,18 +446,28 @@ export function App() {
                 <section className="storyboard-section">
                   <div className="section-line">
                     <h2>
-                      Story sequence <span>04 scenes</span>
+                      Sequence <span>01 / 04 clips</span>
                     </h2>
                     <span>
                       {dirty
                         ? `${impact?.sceneIds.length || 0} scenes affected`
-                        : 'Each scene has a source.'}
+                        : 'Select a clip to inspect its narration'}
                     </span>
+                  </div>
+                  <div className="timeline-ruler" aria-hidden="true">
+                    {[0, 10, 20, 30]
+                      .filter((t) => t < (current?.duration || 40))
+                      .map((t) => (
+                        <span key={t} style={{ left: `${(t / (current?.duration || 40)) * 100}%` }}>
+                          {time(t)}
+                        </span>
+                      ))}
                   </div>
                   <div className="storyboard">
                     {current?.scenes.map((s) => (
                       <button
                         key={s.id}
+                        style={{ flexGrow: s.duration }}
                         className={
                           'scene-card ' +
                           (sceneId === s.id ? 'scene-selected ' : '') +
@@ -564,7 +525,7 @@ export function App() {
             {view === 'history' && (
               <section className="history-view">
                 <div className="section-line">
-                  <h2>A story with a memory.</h2>
+                  <h2>Saved cuts</h2>
                   <span>{state?.versions.length || 0} preserved cuts</span>
                 </div>
                 {state?.versions.map((v) => (
@@ -614,7 +575,10 @@ export function App() {
             )}
             <div className="bottom-note">
               <GitBranch size={14} />
-              <span>Every edit has a reason. Every reason has a source.</span>
+              <span>
+                FalkorDB · {state?.graph.nodes.length || 0} nodes · {state?.graph.edges.length || 0}{' '}
+                dependencies
+              </span>
               <button onClick={() => setView('graph')}>
                 Explore the graph
                 <ArrowUpRight size={12} />
@@ -634,26 +598,23 @@ export function App() {
                 className={inspector === 'activity' ? 'selected' : ''}
                 onClick={() => setInspector('activity')}
               >
-                <Sparkles size={15} />
+                <Scissors size={15} />
                 Activity{busy && <span className="live-dot" />}
               </button>
             </div>
             {inspector === 'sources' ? (
               <div className="source-inspector">
                 <div className="inspector-heading">
-                  <h2>The source of the story</h2>
-                  <p>Change a fact. See what follows.</p>
+                  <h2>Source inspector</h2>
+                  <p>Edit a value to trace affected scenes.</p>
                 </div>
                 <div className="twist-card">
                   <div className="twist-kicker">
-                    <Sparkles size={14} />
-                    TRY THE PLOT TWIST
+                    <FileText size={14} />
+                    DEMO CORRECTION
                   </div>
-                  <h3>
-                    What if the adapter
-                    <br /> wasn’t included?
-                  </h3>
-                  <p>One small correction. A different conclusion.</p>
+                  <h3>The adapter costs extra.</h3>
+                  <p>Mark the required adapter as a separate purchase.</p>
                   <button disabled={!!busy || !state?.latest} onClick={loadCorrection}>
                     Load the correction
                     <ArrowUpRight size={15} />
@@ -757,7 +718,7 @@ export function App() {
                   onClick={() => void rebuild()}
                 >
                   {busy ? <Loader2 size={17} className="spin" /> : <Scissors size={17} />}{' '}
-                  {busy ? 'Rebuilding your story…' : 'Rebuild affected scenes'}
+                  {busy ? 'Rebuilding scenes…' : 'Rebuild affected scenes'}
                   {!busy && <ArrowRight size={16} />}
                 </button>
                 <p className="under-button">Your previous cut is always preserved.</p>
@@ -767,16 +728,16 @@ export function App() {
                 <div className="inspector-heading">
                   <h2>
                     {busy
-                      ? 'The edit is in motion.'
+                      ? 'Revision in progress'
                       : run?.status === 'complete'
-                        ? 'A new perspective.'
-                        : 'Behind the edit.'}
+                        ? 'Revision complete'
+                        : 'Run log'}
                   </h2>
                   <p>
                     {busy
-                      ? 'Real tool calls. Live progress.'
+                      ? 'Tool calls and renderer output.'
                       : run
-                        ? 'An inspectable record of every action.'
+                        ? 'Saved with this version.'
                         : 'Apply a correction to watch the workflow.'}
                   </p>
                 </div>
@@ -916,8 +877,8 @@ function EvidenceMap({ graph, impact }: { graph: EvidenceGraph; impact: Impact |
     <section className="graph-section">
       <div className="graph-heading">
         <div>
-          <h2>Follow the consequence.</h2>
-          <p>The paths that turn a source into a story.</p>
+          <h2>Dependency map</h2>
+          <p>Trace a corrected fact through calculations, claims, and scenes.</p>
         </div>
         <span className="graph-live">
           <span className="status-dot" />
@@ -940,7 +901,7 @@ function EvidenceMap({ graph, impact }: { graph: EvidenceGraph; impact: Impact |
               markerHeight="5"
               orient="auto-start-reverse"
             >
-              <path d="M 0 0 L 10 5 L 0 10 z" fill="#a5aca2" />
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor" />
             </marker>
           </defs>
           {['SOURCES', 'FACTS', 'CALCULATIONS', 'CLAIMS', 'SCENES', 'OUTPUTS'].map((s, i) => (
@@ -981,7 +942,7 @@ function EvidenceMap({ graph, impact }: { graph: EvidenceGraph; impact: Impact |
                   if (e.key === 'Enter' || e.key === ' ') setSelected(n.id);
                 }}
               >
-                <rect width="143" height="48" rx="9" />
+                <rect width="143" height="48" rx="2" />
                 <circle cx="13" cy="24" r="3" />
                 <text x="24" y="28">
                   {n.title.length > 22 ? n.title.slice(0, 21) + '…' : n.title}
@@ -1057,8 +1018,8 @@ function CompareModal({
           <X size={20} />
         </button>
         <div className="eyebrow">THE BEFORE / AFTER</div>
-        <h2 id="compare-title">Same story. Better evidence.</h2>
-        <p>One changed fact can change the conclusion.</p>
+        <h2 id="compare-title">Compare the verdicts</h2>
+        <p>Original source values on the left. The selected revision on the right.</p>
         <div className="compare-grid">
           {[
             { v: original, ref: left, label: 'Original cut' },
