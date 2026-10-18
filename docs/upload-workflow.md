@@ -10,7 +10,9 @@ Keep these files ready:
 - `demo-kit/original-sources.txt` — the source sheets used by that film.
 - `demo-kit/correction-source.txt` — the later correction, used only after graph review.
 
-Leave **OpenAI API credit** selected for the tested path. To try subscription usage, open connection settings, choose **Continue with ChatGPT**, and check for **Plan usage enabled**. Do that before recording. If the account is ineligible, explicitly select API credit; CUTBACK does not switch automatically.
+Use **OpenAI API credit** throughout this recording. Your organisation does not allow ChatGPT sign-in, so use the API setup already configured. Confirm the provider selector says **OpenAI API credit**. If needed, open connection settings and select **Use API credit · GPT-6.1 Sol**.
+
+The API key is configured on the running server. Keep `.env.upload` closed while recording. The header's dollar amount is the remainder of CUTBACK's local estimated allowance, not your OpenAI account balance. Transcription and narration run locally; the API model extracts claims and plans edits.
 
 Click **New project**. Rehearsals remain behind **Projects** and do not appear in the fresh project's history. No database reset is needed.
 
@@ -38,39 +40,107 @@ Approve the plan and render. This step uses local narration and FFmpeg with no m
 
 ## Show FalkorDB Browser
 
-Open **http://localhost:6398**. If Browser asks for the database address inside the container, use `localhost:6379`. Clients running on your Mac connect to port **6397**.
+Copy-and-paste queries are in [upload-demo.cypher](upload-demo.cypher). Run one at a time. They are read-only and do not call OpenAI. For two minutes, prioritise the connected graph, affected-scene result, and finished video; use the other queries for a longer technical explanation.
 
-In CUTBACK's **Dependency graph** tab, expand **Inspect this project in FalkorDB Browser** and copy the graph name. Select that graph in Browser. `cutback_upload_index` contains only the project list.
+Open **http://localhost:6398**. On **Manual Configuration**, set **Host** to `localhost` and **Port** to `6379`. Leave username and password empty and TLS unchecked for this local demo, then click **Log in**. This connects to the database inside the Browser's container; it is not a ChatGPT login. Click **Skip Tutorial** if the introduction appears. These connection settings were checked against the running container.
 
-Show the source-to-scene paths:
+The upload app's JavaScript client runs on your Mac and uses the host-mapped port **6397**. Browser reaches the same database from inside the container on **6379**.
 
-```cypher
-MATCH p=(s:Source)-[:CONTAINS|SUPPORTS|APPEARS_IN*1..6]->(scene:Scene)
-RETURN p
-```
+In CUTBACK's **Dependency graph** tab, expand **Inspect this project in FalkorDB Browser** and copy the graph name. Click **Select Graph** in Browser and choose that exact graph. `cutback_upload_index` contains only the project list. A fresh upload creates a new graph, so do not keep the rehearsal graph selected for the recording.
 
-Find the adapter fact's actual ID:
+Paste one query in the editor and click **RUN**. First find the adapter fact's actual ID:
 
 ```cypher
 MATCH (f:Fact)
 RETURN f.id AS id, f.title AS fact
+ORDER BY id
 ```
 
-Replace `f2` below with that ID:
+Find the row saying that Orbit's required adapter is included in the $79 price. In the verified rehearsal that is `f2`. Replace `f2` below if your new extraction assigns another ID.
+
+Show where that fact came from and which claims and scenes depend on it:
+
+```cypher
+MATCH p=(src:Source)-[:CONTAINS]->(:Evidence)-[:SUPPORTS]->(f:Fact {id:'f2'})
+        -[:SUPPORTS]->(:Claim)-[:APPEARS_IN]->(:Scene)
+RETURN p
+```
+
+`p` names the whole matched path. `RETURN p` lets Browser draw its nodes and relationships. This connects the uploaded source material all the way to the video segments. In the checked graph, this returns three paths because the adapter assumption supports both a cost claim and a recommendation.
+
+Now show the affected-scene list, using the same traversal pattern as the agent:
 
 ```cypher
 MATCH p=(f:Fact {id:'f2'})-[:SUPPORTS|APPEARS_IN*1..4]->(s:Scene)
-RETURN p
+RETURN DISTINCT s.id AS sceneId,
+                s.title AS scene,
+                s.start AS startsAt,
+                s.end AS endsAt
+ORDER BY startsAt
 ```
 
-After rendering, show the receipt:
+What this means:
+
+- `(f:Fact {id:'f2'})` starts at the selected fact node.
+- `->` follows the direction of the stored dependencies.
+- `SUPPORTS|APPEARS_IN` allows those two relationship types.
+- `*1..4` allows paths of one to four relationships. The current fact-to-claim-to-scene paths are two relationships long.
+- `(s:Scene)` keeps video segments as the endpoints.
+- `DISTINCT` returns each segment once even when several claims lead to it.
+
+The verified rehearsal returns:
+
+| Scene ID | Display name | Original start | Original end   |
+| -------- | ------------ | -------------- | -------------- |
+| `s1`     | Scene 2      | 11.32 seconds  | 24 seconds     |
+| `s2`     | Scene 3      | 24 seconds     | 35.877 seconds |
+
+There are three explanation paths but only two distinct affected scenes. Scene 1 (`s0`) has no dependency path from this adapter fact and is retained. These timestamps refer to the original upload; new narration can change the revised video's duration. Fresh extractions can assign different fact IDs and dependencies, so check the result before recording.
+
+To see every explanation path as text:
 
 ```cypher
-MATCH p=(r:Revision)-[:APPLIES]->(:Correction)-[:CORRECTS]->(:Fact)
+MATCH p=(f:Fact {id:'f2'})-[:SUPPORTS|APPEARS_IN*1..4]->(s:Scene)
+RETURN s.id AS sceneId,
+       [n IN nodes(p) | n.title] AS dependencyPath
+```
+
+The list expression reads the title of every node along a path, in order. That is how CUTBACK can show the reason a segment was included rather than just returning a scene ID.
+
+After rendering, show the correction receipt:
+
+```cypher
+MATCH p=(f:Fact)<-[:CORRECTS]-(c:Correction)<-[:APPLIES]-(r:Revision)
+        -[:REBUILDS]->(s:Scene)
 RETURN p
 ```
 
-You can explain: “The JavaScript FalkorDB client executes a parameterized variable-length traversal. The returned scene IDs become the allowed edit set. The server rejects an extra or missing scene and queries the graph again before rendering.” The client code is in `server/upload/store.ts`; the MCP tools are in `server/upload/pipeline.ts`.
+This shows the original fact, the correction, the export that applied it, and the scenes that were rebuilt. The original fact still says the adapter was included because it describes the uploaded video. The correction is appended as a separate node. Its `source` property contains the revised source text you supplied. An empty receipt result before rendering is expected.
+
+You can explain: “The JavaScript FalkorDB client executes a parameterized variable-length traversal. The returned scene IDs become the allowed edit set. The server rejects an extra or missing scene and queries the graph again before rendering.”
+
+For a quick code view, show `server/upload/store.ts`: the query is near the top and `selectGraph(...).query(..., { params, TIMEOUT: 10000 })` executes it. The running app passes `$factId` separately as a query parameter. The Browser examples use a literal ID for easy pasting. In `server/upload/pipeline.ts`, the render branch calls `store.impact()` and then `validateEdits()` before FFmpeg runs.
+
+## What each part demonstrates
+
+| Part                           | What you are showing                                                                                                        |
+| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------- |
+| New project                    | A fresh upload has its own graph and no inherited exports.                                                                  |
+| Video and original source file | The inputs used to produce the evidence, rather than an unexplained preloaded graph.                                        |
+| Evidence                       | A timestamped speech passage, sampled frame, or supplied source passage.                                                    |
+| Fact                           | An extracted underlying assertion, such as “the adapter is included.” It still needs review.                                |
+| Claim                          | A conclusion relying on facts, such as “Orbit costs $40 less.”                                                              |
+| Scene                          | A bounded interval of the uploaded film that expresses a claim.                                                             |
+| Graph traversal                | Which scenes depend on the changed assertion, including later conclusions.                                                  |
+| MCP activity                   | One model-driven agent discovering and calling tools. Four tools do not mean four agents.                                   |
+| Calculator                     | Deterministic arithmetic; it is a tool result, not a separate calculation node in this upload graph.                        |
+| Plan review                    | You check the proposed narrative before rendering. The server enforces scene scope, not universal truth of arbitrary prose. |
+| Revised MP4                    | Real correction cards, synthetic narration, and retained source footage stitched into a playable file.                      |
+| Receipt                        | The source correction and the specific export and scenes associated with it.                                                |
+
+The useful distinction is between a changed input and the conclusions that depend on it. The adapter correction changes the total cost, the saving, and the recommendation. The source-to-scene relationships make those consequences explicit.
+
+FalkorDB is required by this implementation: it stores the dependencies, provides the edit scope, and is queried again before publication. If that query cannot run, the pipeline cannot validate and publish the revision. This does not imply that a graph database verifies the truth of the source; you still review the evidence and extracted connections.
 
 ## Two-minute narration
 
