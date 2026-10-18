@@ -89,9 +89,14 @@ try {
   await page.waitForTimeout(3000);
 } finally {
   await context.close();
-  await browser.close();
+  try {
+    // Closing the context flushes the video; keep the browser connection alive
+    // until Playwright has copied the artifact to its requested destination.
+    await video.saveAs('artifacts/cutback-walkthrough.webm');
+  } finally {
+    await browser.close();
+  }
 }
-await video.saveAs('artifacts/cutback-walkthrough.webm');
 await promisify(execFile)(
   ffmpeg,
   [

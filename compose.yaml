@@ -9,7 +9,7 @@ services:
       REDIS_ARGS: '--appendonly yes'
       FALKORDB_ARGS: 'THREAD_COUNT 2'
     volumes:
-      - graph-data:/data
+      - graph-data:/var/lib/falkordb/data
     healthcheck:
       test: ['CMD', 'redis-cli', 'ping']
       interval: 5s
