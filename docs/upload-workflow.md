@@ -36,11 +36,13 @@ Paste `correction-source.txt` into **Source for this correction**, then choose *
 
 Show the dependency paths and expand **Inspect the Cypher query**. The activity log records MCP tool discovery, impact traversal, scene reads, arithmetic, and plan submission. Check the narration: **$79 + $49 = $128**, versus **$119**, making Forma **$9 cheaper** on upfront cost.
 
-Approve the plan and render. This step uses local narration and FFmpeg with no model call. On **Compare & export**, click **Jump to first correction**. Play the original briefly, pause it, then play the revised cut. The replacement is a labelled correction card. The receipt lists changed and preserved segments; download the MP4 and captions.
+Approve the plan and render. This step uses local narration and FFmpeg with no model call. On **Compare & export**, click **Jump to first edit**. Play the original briefly, pause it, then play the revised cut. The chart now shows $128 and $119 in the original style. The verdict shows Forma and says it costs $9 less. The receipt lists changed and preserved segments; download the MP4 and captions.
+
+The bundled speaker film has editable layouts. Its file fingerprint selects those layouts and the four authored cut points; it does not supply the extracted facts or the edit scope. For a new project, the model still reads the real transcript, sampled frames and supplied source text. Other videos receive editorial scenes, without exact reconstruction of their original visuals.
 
 ## Show FalkorDB Browser
 
-Copy-and-paste queries are in [upload-demo.cypher](upload-demo.cypher). Run one at a time. They are read-only and do not call OpenAI. For two minutes, prioritise the connected graph, affected-scene result, and finished video; use the other queries for a longer technical explanation.
+Show Browser **after reviewing and approving the extracted graph, before clicking Trace impact & propose edits**, around 0:45 in a two-minute video. Keep Browser connected in another tab before recording. Copy-and-paste queries are in [upload-demo.cypher](upload-demo.cypher). Run one at a time. They are read-only and do not call OpenAI. For two minutes, prioritise the connected graph, affected-scene result, and finished video; use the other queries for a longer technical explanation.
 
 Open **http://localhost:6398**. On **Manual Configuration**, set **Host** to `localhost` and **Port** to `6379`. Leave username and password empty and TLS unchecked for this local demo, then click **Log in**. This connects to the database inside the Browser's container; it is not a ChatGPT login. Click **Skip Tutorial** if the introduction appears. These connection settings were checked against the running container.
 
@@ -66,7 +68,7 @@ MATCH p=(src:Source)-[:CONTAINS]->(:Evidence)-[:SUPPORTS]->(f:Fact {id:'f2'})
 RETURN p
 ```
 
-`p` names the whole matched path. `RETURN p` lets Browser draw its nodes and relationships. This connects the uploaded source material all the way to the video segments. In the checked graph, this returns three paths because the adapter assumption supports both a cost claim and a recommendation.
+`p` names the whole matched path. `RETURN p` lets Browser draw its nodes and relationships. This connects the uploaded source material all the way to the video segments. In the aligned rehearsal, the adapter assumption supports both a cost claim and a recommendation, giving two paths.
 
 Now show the affected-scene list, using the same traversal pattern as the agent:
 
@@ -90,12 +92,12 @@ What this means:
 
 The verified rehearsal returns:
 
-| Scene ID | Display name | Original start | Original end   |
-| -------- | ------------ | -------------- | -------------- |
-| `s1`     | Scene 2      | 11.32 seconds  | 24 seconds     |
-| `s2`     | Scene 3      | 24 seconds     | 35.877 seconds |
+| Scene ID | Display name  | Original start | Original end   |
+| -------- | ------------- | -------------- | -------------- |
+| `s1`     | The real cost | 6.917 seconds  | 20.292 seconds |
+| `s2`     | The verdict   | 20.292 seconds | 25.75 seconds  |
 
-There are three explanation paths but only two distinct affected scenes. Scene 1 (`s0`) has no dependency path from this adapter fact and is retained. These timestamps refer to the original upload; new narration can change the revised video's duration. Fresh extractions can assign different fact IDs and dependencies, so check the result before recording.
+The opening (`s0`) and closing (`s3`) have no dependency path from this adapter fact and are retained. A scene can be reached by several paths, so `DISTINCT` prevents duplicate entries. These timestamps refer to the original upload; new narration can change the revised video's duration. Fresh extractions can assign different fact IDs and dependencies, so check the result before recording.
 
 To see every explanation path as text:
 
@@ -119,6 +121,10 @@ This shows the original fact, the correction, the export that applied it, and th
 
 You can explain: “The JavaScript FalkorDB client executes a parameterized variable-length traversal. The returned scene IDs become the allowed edit set. The server rejects an extra or missing scene and queries the graph again before rendering.”
 
+For a more conversational version, say: “This fact says the adapter is included. It supports the cost comparison, and that comparison affects which speaker the video recommends. This query follows those connections to the scenes. So changing the adapter price can change the ending, even when the ending never mentions the adapter.” Then return to CUTBACK and show the agent's `trace_impact` tool call in **Project activity**.
+
+Browser is the visual client you show on screen. The application itself uses the `falkordb` JavaScript client. MCP exposes the application's graph query and other tools to the agent; MCP is not a second database. The graph finds dependencies; arithmetic computes the new prices; the editable renderer builds the resulting film.
+
 For a quick code view, show `server/upload/store.ts`: the query is near the top and `selectGraph(...).query(..., { params, TIMEOUT: 10000 })` executes it. The running app passes `$factId` separately as a query parameter. The Browser examples use a literal ID for easy pasting. In `server/upload/pipeline.ts`, the render branch calls `store.impact()` and then `validateEdits()` before FFmpeg runs.
 
 ## What each part demonstrates
@@ -135,7 +141,7 @@ For a quick code view, show `server/upload/store.ts`: the query is near the top 
 | MCP activity                   | One model-driven agent discovering and calling tools. Four tools do not mean four agents.                                   |
 | Calculator                     | Deterministic arithmetic; it is a tool result, not a separate calculation node in this upload graph.                        |
 | Plan review                    | You check the proposed narrative before rendering. The server enforces scene scope, not universal truth of arbitrary prose. |
-| Revised MP4                    | Real correction cards, synthetic narration, and retained source footage stitched into a playable file.                      |
+| Revised MP4                    | Updated chart and verdict in the speaker film's existing style, local narration, and retained opening and closing footage.  |
 | Receipt                        | The source correction and the specific export and scenes associated with it.                                                |
 
 The useful distinction is between a changed input and the conclusions that depend on it. The adapter correction changes the total cost, the saving, and the recommendation. The source-to-scene relationships make those consequences explicit.
@@ -164,10 +170,12 @@ Record the real workflow, then trim waiting periods for transcription, inference
 
 **1:35–2:00 — Compare and export**
 
-“This is the uploaded version. This is the revised cut, with a correction card and new synthetic narration. Unaffected segments retain their footage. The receipt shows which source caused each change. I can export the MP4 and captions, while keeping the original video.”
+“This is the uploaded version. In the revised cut, the chart changes and Forma becomes the lower-cost pick. The opening and closing keep their original footage. The source trail stays here in the receipt. I can export the MP4 and captions, while keeping the original video.”
 
 ## Spending and rehearsals
 
 The completed test of this fixture recorded a conservative API estimate of about **$0.04**, including extraction and planning. It is not a quote for every run. The branch has a **$1 local allowance** across restarts. Reviewing, playback, and rendering do not spend model credit. Repeating analysis or planning does.
 
 If a request fails, fix the reported problem before retrying. The completed rehearsal is available under **Projects** if you need its export without another model call. For an entirely fresh recording, choose **New project** again.
+
+An older speaker-film project with a card export also offers **Create in-video edit**. That reuses its reviewed analysis, aligns its claims with the authored scene boundaries, and creates a separate project with a new graph. It does not run the model again. Review the plan and render locally. For the full upload-to-agent recording, start with **New project** instead.

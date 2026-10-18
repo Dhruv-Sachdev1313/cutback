@@ -44,7 +44,7 @@ try {
       .locator('.comparison-grid video')
       .evaluateAll((vs) => vs.map((v) => v.poster)))
       assert.equal((await fetch(poster)).status, 200);
-    await page.getByRole('button', { name: 'Jump to first correction' }).click();
+    await page.getByRole('button', { name: 'Jump to first edit' }).click();
     await page.waitForFunction(() =>
       [...document.querySelectorAll('.comparison-grid video')].every(
         (v) => v.currentTime > 0 && !v.seeking && v.readyState >= 2,

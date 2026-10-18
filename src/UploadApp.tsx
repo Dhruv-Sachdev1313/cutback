@@ -278,9 +278,10 @@ export function UploadApp() {
   const firstChanged = project?.scenes.find((s) => revision?.affectedIds.includes(s.id));
   const originalPoster = project?.scenes[0]?.frameUrl;
   const revisedPoster =
-    revision && firstChanged
+    revision?.posterUrl ||
+    (revision && firstChanged
       ? `/uploads/${project!.id}/${revision.id}/${firstChanged.id}/card-0.png`
-      : originalPoster;
+      : originalPoster);
   return (
     <div className="intake-app">
       <header className="intake-header">
@@ -829,7 +830,7 @@ export function UploadApp() {
                     {project.edits.map((e) => (
                       <article key={e.sceneId}>
                         <small>
-                          {project.scenes.find((s) => s.id === e.sceneId)?.title} · CORRECTION CARD
+                          {project.scenes.find((s) => s.id === e.sceneId)?.title} · VIDEO SCENE
                         </small>
                         <h3>{e.title}</h3>
                         <p>{e.narration}</p>
@@ -837,8 +838,9 @@ export function UploadApp() {
                       </article>
                     ))}
                     <p className="cost-note">
-                      Affected segments become correction cards with synthetic narration. Other
-                      segments retain their uploaded footage and audio.
+                      {project.renderProfile
+                        ? 'The chart, illustration and narration use this film’s editable layouts. The opening and closing footage stay in place when they are outside the affected set.'
+                        : 'Affected segments become editorial scenes with local synthetic narration. Other segments retain their uploaded footage and audio.'}
                     </p>
                     <button
                       className="button-primary"
@@ -888,7 +890,12 @@ export function UploadApp() {
               </section>
               <section>
                 <div className="video-label revised">
-                  REVISED CUT<span>Correction cards + original footage</span>
+                  REVISED CUT
+                  <span>
+                    {revision.presentation === 'integrated'
+                      ? 'Updated scenes + original footage'
+                      : 'Earlier card export'}
+                  </span>
                 </div>
                 <video
                   key={revision.id}
@@ -912,7 +919,7 @@ export function UploadApp() {
                       comparisonRevised.current.currentTime = firstChanged.start + 0.1;
                   }}
                 >
-                  <Scissors size={17} /> Jump to first correction
+                  <Scissors size={17} /> Jump to first edit
                 </button>
               )}
               <a className="button-primary" href={revision.videoUrl} download="cutback-revised.mp4">
@@ -936,6 +943,42 @@ export function UploadApp() {
                 Make another correction
               </button>
             </div>
+            {!project.renderProfile && revision.presentation !== 'integrated' && (
+              <div className="receipt">
+                <div>
+                  <h2>Use the film’s own scenes</h2>
+                  <p>
+                    For the supplied speaker film, rebuild the chart and verdict in their original
+                    style. This reuses your saved analysis in a separate project and costs no API
+                    credit.
+                  </p>
+                </div>
+                <button
+                  className="button-primary"
+                  disabled={pending}
+                  onClick={() =>
+                    void act(async () => {
+                      const next = await api<UploadProject>(
+                        '/projects/' + project.id + '/integrated',
+                        {},
+                      );
+                      setProject(next);
+                      setFacts(next.facts);
+                      setSelectedFact(next.correction!.factId);
+                      setCorrected(next.correction!.text);
+                      setReason(next.correction!.source);
+                      setGraphSelection(next.correction!.factId);
+                      setReviewed(true);
+                      setSelectedRevision('');
+                      setViewStep(2);
+                      setGraph(await api<GraphView>('/projects/' + next.id + '/graph'));
+                    })
+                  }
+                >
+                  Create in-video edit
+                </button>
+              </div>
+            )}
             <div className="receipt">
               <div>
                 <span className="eyebrow">CORRECTION RECEIPT</span>

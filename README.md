@@ -40,11 +40,15 @@ The upload app refuses the original demo's app and database ports. It has its ow
 4. Check the quoted passages and scene connections. Open **Dependency graph**, then approve the graph after reviewing it.
 5. Select the fact saying Orbit's required adapter is included. Enter: **Orbit Mini's required power adapter is not included in its $79 speaker price. It must be bought separately for $49.** Paste [`demo-kit/correction-source.txt`](demo-kit/correction-source.txt) into the correction source field.
 6. Choose **Trace impact & propose edits**. Check the graph paths and narration: Orbit now costs $128; Forma remains $119, making it $9 cheaper on upfront cost.
-7. Choose **Approve plan & render video**, then **Jump to first correction**. Compare the cuts and download the MP4 and SRT captions.
+7. Choose **Approve plan & render video**, then **Jump to first edit**. Compare the cuts and download the MP4 and SRT captions.
 
-The checked live run extracted six facts, six claims, and three segments. It revised two segments and preserved one. Fresh model runs can produce different wording and counts; review the actual result.
+The bundled film has four authored scenes: opening, cost, verdict, and closing. Its media fingerprint selects the matching editable layouts and exact cut points. Speech, frame evidence, facts, and claim dependencies are still extracted from the upload and reviewed by you. Fresh model runs can produce different fact wording and links; review the actual result.
 
-Affected segments become labelled **correction cards with synthetic narration**. Unaffected segments retain their uploaded footage and audio, normalized for export. CUTBACK does not alter a filmed speaker's lips or voice. Each export applies one correction to the original upload; corrections are not cumulative.
+For this film, the cost chart and recommendation are rebuilt in their original style. The chart shows $128 versus $119, the speaker illustration changes to Forma, and the narration says it costs $9 less. There is no correction announcement inside the film. Source changes and export history stay in the app and graph.
+
+Other uploads use automatic scene detection and editorial scenes with local synthetic narration. Matching an arbitrary film's visual style or editing a filmed speaker's lips is outside this prototype. Unaffected segments retain their uploaded footage and audio, normalized for export. Each export applies one correction to the original upload; corrections are not cumulative.
+
+An older speaker-film project can use **Create in-video edit** to reuse its reviewed transcript, facts, and saved correction without another model call. It creates a separate project, aligns the saved claims with the four authored scenes, and queries FalkorDB for the new edit scope. Earlier exports remain in the original project.
 
 [Detailed walkthrough, FalkorDB Browser queries, and two-minute recording script](docs/upload-workflow.md).
 

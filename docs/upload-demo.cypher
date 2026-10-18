@@ -32,7 +32,7 @@ RETURN p;
 
 // 4. Main impact query: the unique segments allowed to change.
 // This uses the same MATCH pattern as the agent's trace_impact tool.
-// Tested result: s1 = 11.32–24 seconds; s2 = 24–35.877 seconds.
+// Aligned speaker-film result: s1 = 6.917–20.292s; s2 = 20.292–25.75s.
 MATCH p=(f:Fact {id:'f2'})-[:SUPPORTS|APPEARS_IN*1..4]->(s:Scene)
 RETURN DISTINCT s.id AS sceneId,
                 s.title AS scene,
@@ -41,7 +41,8 @@ RETURN DISTINCT s.id AS sceneId,
 ORDER BY startsAt;
 
 // 5. Explanation paths: several paths can lead to the same scene.
-// The tested fact has 3 dependency paths reaching 2 distinct scenes.
+// The aligned rehearsal reaches the cost scene and verdict through 2 paths.
+// New analyses may produce different fact IDs or multiple paths per scene.
 MATCH p=(f:Fact {id:'f2'})-[:SUPPORTS|APPEARS_IN*1..4]->(s:Scene)
 RETURN s.id AS sceneId,
        [n IN nodes(p) | n.title] AS dependencyPath;
