@@ -135,7 +135,7 @@ Change the adapter price to **$40** while it is excluded: both products cost $11
 
 ## Showing the database in FalkorDB Browser
 
-Add a short database segment after the correction preview, or record it separately for the article:
+Add a short database segment after the correction preview:
 
 1. Run `docker compose up -d falkordb` if needed, then open **http://localhost:6388**.
 2. In **Manual Configuration**, enter host `localhost` and port `6379`. Leave username and password empty for this local Compose setup, then select **Log in**. The Browser and database share a container; native clients outside it use port `6387`.
@@ -147,7 +147,7 @@ Suggested narration: “This is the same database the editing tools query. Start
 
 The current model returns six unique nodes and five relationships for this correction. Choose **Tree → Left → Right** from the layout selector and use **Zoom in** to make the graph labels readable. These display choices do not change the graph model.
 
-Query 1 shows all 16 authored artifacts, and query 4 shows the stored video versions. All four queries are read-only. A reproducible screenshot capture is available with `node scripts/falkordb-screenshots.mjs`.
+Query 1 shows all 16 authored artifacts, and query 4 shows the stored video versions. All four queries are read-only.
 
 ## Submission material
 

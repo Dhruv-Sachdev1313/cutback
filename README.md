@@ -6,8 +6,6 @@ Upload a video and its source material. When a fact changes, CUTBACK follows an 
 
 The upload studio opens on an empty project. There is no preloaded graph or generated video. Previous uploads live behind **Projects**, with separate graphs and histories. The [earlier authored demo](docs/authored-demo.md) remains available separately.
 
-[Read the development article: I built CUTBACK to fix a video without recording it all again](docs/building-cutback.md).
-
 ## Run locally
 
 Requirements: Node.js 22.12+, Docker, [uv](https://docs.astral.sh/uv/), and local speech synthesis (`say` on macOS or `espeak-ng` on Linux). FFmpeg and FFprobe come with npm dependencies. The upload setup has been tested natively on macOS; it does not use the older app's Docker image.

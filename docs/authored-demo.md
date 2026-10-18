@@ -105,7 +105,6 @@ RETURN DISTINCT a.id AS id, a.kind AS kind,
 - [Queries for the FalkorDB Browser demonstration](falkordb-browser.cypher)
 - [Architecture and scope](architecture.md)
 - [Recording script and demo challenge](demo.md)
-- [Build story with screenshots and debugging notes](building-cutback.md)
 
 ## Agent and MCP tools
 
