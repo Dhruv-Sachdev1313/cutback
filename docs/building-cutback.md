@@ -1,40 +1,39 @@
-# Building CUTBACK to revise videos when facts change
+# I built CUTBACK to revise videos when their facts change
 
-The video recommends the Orbit Mini. It costs $79; the Forma One costs $119. On upfront cost, Orbit wins by $40.
+I built CUTBACK for videos whose conclusions depend on source data. It connects facts to the calculations, claims, and scenes that use them, so an editing agent can follow a correction through a finished video.
 
-Then one source field changes. Orbit's required adapter is sold separately, and it costs $49. The complete price is now $128. The next cut recommends Forma, which is $9 cheaper.
+The problem is familiar in product comparisons, tutorials, and explainers. A source changes after the video is finished. Updating a number in the script is straightforward. Finding every chart, caption, and conclusion that depended on it takes more work.
 
-The chart changes. The narrator reads the corrected prices. The verdict changes with them. The opening and closing clips stay exactly where they were, using the same media files.
+For the [FalkorDB hackathon](https://www.wemakedevs.org/hackathons/falkordb), I tested this with a four-scene comparison of two fictional speakers. Orbit Mini costs $79. Forma One costs $119. The original video recommends Orbit because it is $40 cheaper.
 
-That is the demo I wanted to build for the [FalkorDB hackathon](https://www.wemakedevs.org/hackathons/falkordb). I called it CUTBACK.
+Then I correct one source field: Orbit's required adapter is sold separately. The adapter costs $49, bringing the complete price to $128. Forma is now $9 cheaper.
 
-![CUTBACK's redesigned studio showing the corrected Forma verdict, source inspector, and four scene clips.](article-assets/studio.png)
+CUTBACK updates the cost and verdict scenes, including their graphics, narration, and captions. The opening and closing retain their existing clips. Both versions remain available for comparison.
 
-_The working studio after the redesign. The source editor is on the right; the sequence shows which clips changed. Both products are fictional._
+![CUTBACK's studio showing the corrected Forma verdict and source inspector.](article-assets/studio.png)
 
-## Starting with a demo someone could understand
+_The revised cut in CUTBACK. Source facts are on the right; the sequence shows the four scenes below the player._
 
-The first suggestions I got were familiar: an incident responder, a fraud investigator, a codebase assistant, shared agent memory, a company knowledge tool, and a cloud attack-path investigator. They solve real problems. I wanted a project whose result would be visible in a short recording, without needing a long explanation of the surrounding infrastructure.
+## Turning a correction into an edit
 
-A factual correction in a finished video gave me that result. Updating a source document is easy enough. Finding every sentence, graphic, caption, and recommendation that depended on the old fact is the annoying part. An editor has to remember those connections or check the whole film again.
+I wanted the project to answer a few specific questions before rendering anything:
 
-CUTBACK makes those dependencies explicit. The experiment is whether an agent can use them to revise the right parts of a film and leave the rest alone.
+- Which scenes depend on the corrected fact?
+- Does the correction change the conclusion?
+- What evidence explains each edit?
+- Which clips can I preserve?
 
-I built this with Codex, which wrote much of the implementation and ran the automated checks. I chose the concept and OpenAI, pushed for a recordable demo, and rejected the first interface. The bugs below came out of that assisted build. Code review and a full understanding of the implementation are still on my list before submission.
+I modelled the dependencies in FalkorDB:
 
-## Giving the graph an editing job
+```text
+Source → Fact → Calculation → Claim → Scene → Rendered assets
+```
 
-The hackathon requires FalkorDB to support a central part of the product. For CUTBACK, the graph decides which scenes the editor is allowed to change.
+The two product sheets supply Orbit's base price, its adapter price, whether the adapter is included, and Forma's complete price. Those facts feed the total-cost calculations. The calculations support the price comparison and recommendation, which appear in two scenes.
 
-The dependency model starts with two synthetic product sheets. They supply four facts: Orbit's base price, its adapter price, whether the adapter is included, and Forma's complete price. Those facts feed cost calculations. The calculations feed comparison claims, and the claims feed the cost and verdict scenes.
+The opening asks the comparison question. The closing explains the scope and fictional data. Neither uses the price figures, so this correction does not reach them.
 
-The opening asks the comparison question. The closing explains the scope and fictional data. Neither depends on the price figures, so a price correction does not reach them.
-
-![The dependency map showing highlighted paths from the adapter inclusion fact through Orbit's total, comparison claims, and the cost and verdict scenes.](article-assets/dependency-map.png)
-
-_Changing the adapter-inclusion fact reaches two scenes. The opening and closing sit outside those paths._
-
-The traversal that drives the edit is short enough to inspect:
+The query that finds the affected parts is:
 
 ```cypher
 MATCH p=(f:Artifact)-[:FEEDS*1..8]->(a:Artifact)
@@ -44,104 +43,148 @@ RETURN DISTINCT a.id AS id, a.kind AS kind,
   [n IN nodes(p) | n.title] AS pathTitles
 ```
 
-The application starts at the changed facts and follows `FEEDS` edges. It returns both the affected artifacts and the paths explaining how it reached them. For the adapter correction, the edit plan must contain the cost and verdict scenes.
+It starts at the changed facts and follows `FEEDS` relationships. Returning the paths gives me an explanation for each affected scene as well as the scene IDs themselves.
 
-One integration test removes a dependency edge from the actual database and checks that the affected scene disappears from the result. That test mattered more than a screenshot of a graph: it checked whether changing the graph changed the application's decision.
+![CUTBACK's dependency map showing the paths from the adapter fact to the cost and verdict scenes.](article-assets/dependency-map.png)
 
-This is an authored dependency model. The prototype does not discover the structure of an arbitrary uploaded film. Adding another kind of video would require another scene model and a way to connect its claims to evidence.
+_The same correction reaches the cost comparison and the verdict through their calculations and claims._
 
-## What the agent can decide
+The server checks the agent's edit plan against this result. If the graph returns two scenes, the plan must cover those two scenes. An integration test removes a dependency edge from FalkorDB and checks that the corresponding scene disappears from the result.
 
-The editorial agent has four tools: `trace_impact`, `calculate_costs`, `read_scene`, and `submit_edit_plan`.
+This is also where I kept the prototype small. I authored the scene model and its dependencies. CUTBACK does not yet infer those relationships from an arbitrary uploaded video.
 
-An MCP client discovers those tools from an in-process MCP server. Their schemas are passed to the OpenAI Responses API, and requested function calls are dispatched through the MCP session. The model can inspect the graph, calculate the comparison, read the affected scenes, and submit an edit plan.
+## Inspecting the graph in FalkorDB Browser
 
-The server checks the plan before using it. The agent must have traced the impact, calculated the prices, and read every affected scene. It cannot add unrelated scenes or choose a verdict that contradicts the arithmetic.
+I also opened the database in [FalkorDB Browser](https://github.com/FalkorDB/falkordb-browser), the project's visual client. It lets me run Cypher and inspect the stored nodes and relationships directly.
 
-Prices are stored as integer cents. A factual script compiler inserts the verified values into narration and visual templates. That keeps a cost comparison from casually growing an unsupported claim about which speaker sounds better. The agent chooses a constrained editorial plan; this version does not ask it to write unrestricted narration.
+For my local setup, Docker exposes the database on port `6387` and the Browser on `6388`:
 
-There is an important boundary in the current build: the OpenAI integration is implemented, but a live API run has not been verified because no key was configured during these checks. The screenshots show the explicitly labelled Local rules mode. That mode invokes the real MCP tools, graph queries, speech synthesis, and renderer, using a deterministic plan. It allowed the rest of the application to be tested without pretending an LLM was making the decisions.
+```yaml
+ports:
+  - '127.0.0.1:6387:6379'
+  - '127.0.0.1:6388:3000'
+```
 
-When OpenAI mode is selected, API errors fail the revision and leave the last published cut available. There is no quiet fallback that turns an unsuccessful model call into a successful agent demo.
+After starting the database with `docker compose up -d falkordb`, I open `http://localhost:6388` and select the `cutback` graph. The Browser connects to `localhost:6379` inside its container; the native application uses the mapped host port, `6387`.
 
-## Producing an actual video
+To inspect the adapter correction, I run:
 
-The frontend is React and TypeScript, with an Express API behind it. FalkorDB stores source facts, revision state, citations, and run events. The rendering pipeline turns SVG scene layouts into PNGs with Sharp, synthesizes speech, and uses FFmpeg to produce H.264 video with AAC audio.
+```cypher
+MATCH p=(f:Artifact {id:'fact_adapterIncluded'})
+  -[:FEEDS*1..8]->(s:Artifact {kind:'scene'})
+RETURN p
+```
 
-There was no system FFmpeg binary available on the development machine, so the native setup uses the binary supplied by `ffmpeg-static`. Speech uses macOS `say` locally. The Docker image supplies Linux speech through `espeak-ng` and installs FFmpeg itself. OpenAI speech is an optional configuration.
+The result contains six nodes and five relationships. It follows the adapter fact through Orbit's total cost, then branches into the comparison and verdict claims and their scenes.
 
-Captions are burned into the video, and an SRT file is exported separately. Their timing is estimated from the length of each caption cue within the audio segment. It is not word-level forced alignment.
+![The official FalkorDB Browser displaying CUTBACK's adapter dependency paths.](article-assets/falkordb-browser.png)
 
-Each scene has a fingerprint based on its rendering inputs. If an identical scene already exists, the renderer can use that cached clip. Unaffected scenes keep their previous file paths. The final film is assembled only after checks on the calculations, scene coverage, narration, and preservation of unrelated footage.
+_The stored dependency paths in FalkorDB Browser, using the tree layout to follow the correction from left to right._
 
-![The original and revised video verdicts displayed side by side, showing Orbit as $40 cheaper before the correction and Forma as $9 cheaper afterward.](article-assets/compare-verdicts.png)
+For this graph's three-step route from fact to scene, I replace `RETURN p` with a projection that gives each step its own column:
 
-_These are frames from the generated MP4s. The original cut remains available after the correction._
+```cypher
+WITH s, [n IN nodes(p) | n.title] AS steps
+RETURN steps[0] AS fact,
+  steps[1] AS calculation,
+  steps[2] AS claim,
+  s.title AS scene
+```
 
-The render fingerprint needed a precise explanation in the documentation. It is a hash of the recipe for a scene, not a checksum of the MP4 bytes. Browser QA separately records SHA-256 checksums for the preserved media. Calling both things a file hash would have overstated what the internal identifier proved.
+That returns `02 · The real cost` and `03 · The verdict`, each with the path that led to it.
 
-## Bugs that showed up after the first successful render
+![FalkorDB Browser's table showing the two affected scenes and their dependency paths.](article-assets/falkordb-impact-table.png)
 
-The most misleading bug was a status label. A repeated correction could produce the right video while the interface reported zero updated scenes and four preserved scenes.
+_The affected scenes returned by the database. The opening and closing are absent from this result._
 
-The renderer's flag answered whether FFmpeg had produced a new file during that run. The interface used it to answer whether the scene had changed from the preceding cut. Those answers differ when an older cached clip replaces the current one.
+This is a useful part of the demo because someone can inspect the query outside CUTBACK's interface and see how the edit scope was selected.
 
-The published scene status now compares its fingerprint with the previous version's fingerprint. A restored cached clip can therefore count as updated. The log separately explains that the renderer reused an existing asset. Browser checks assert the expected two-updated, two-preserved result.
+## Giving the agent a bounded editing task
 
-Revision handling also needed more care than a render button suggests. Two requests can arrive with the same expected version. A compare-and-set query acquires a lock in FalkorDB; only one request can own the revision. The new version becomes active after rendering and verification succeed. Interrupted runs are marked failed when the API restarts, and the last published cut remains available. This is designed for one API process, not a distributed rendering farm.
+I connected the editorial agent to four MCP tools: `trace_impact`, `calculate_costs`, `read_scene`, and `submit_edit_plan`.
 
-Startup had its own failure case. If FalkorDB was unavailable, the database SDK could emit a connection error before the application had received a client instance to attach a listener to. The connection path now checks TCP availability first, and the API retries initialization while reporting that it is not ready. Starting the web server no longer assumes the database has already started.
+The MCP client discovers their schemas and passes them to the OpenAI Responses API. Requested function calls are dispatched through the MCP session. The agent can trace the correction, calculate the prices, read the affected scenes, and submit a plan.
 
-Some friction came from the development environment. The first UI automation route was unavailable, so browser checks used an isolated Chrome session through Playwright. The `tsx` command also hit an IPC socket restriction in the automated environment. The test and production-start scripts were changed to invoke Node with `--import tsx`. Those were tooling fixes, separate from the application logic.
+Before accepting that plan, the server checks that the required tools were used, that every affected scene was read, and that the proposed verdict agrees with the arithmetic. Prices are stored as integer cents.
 
-## Running out of disk during dependency updates
+I kept the narration constrained too. A script compiler inserts verified figures into narration and visual templates. The evidence supports a total-cost comparison; it does not support claims about which speaker sounds better. The agent selects an editorial plan within that scope.
 
-The Docker build reported seven dependency advisories, including two critical findings. The affected packages included the MCP SDK, Sharp, Playwright, Vite, and a development dependency chain through `concurrently`. Updating them brought npm's reported count to zero at the time of the check.
+The screenshots here were captured in **Local rules** mode, which uses the same MCP tools, database, and renderer with a deterministic plan. The OpenAI integration is implemented, but a live API run was still unverified when I captured these checks. In OpenAI mode, an API failure leaves the previous published cut available and marks the new revision as failed.
 
-The update itself failed halfway through. The machine had about 122 MiB free, and npm reported `ENOSPC`. A second install hit `ENOTEMPTY` because the interrupted operation had left partially moved package directories. Docker's image store also started returning I/O errors.
+## Rendering the revised cut
 
-Clearing npm's downloadable package cache recovered roughly 2.7 GB. The lockfile was updated, and a clean `npm ci` repaired the interrupted installation. Docker was restarted after checking that CUTBACK's database was the only running container. The build, graph tests, and browser flow were then run again with the patched dependencies.
+The application uses React and TypeScript, with an Express API behind it. FalkorDB stores source revisions, run events, and video history alongside the dependency graph.
 
-The project files and database were kept. The space recovery came from regenerable package cache data.
+The renderer turns SVG scene layouts into PNGs with Sharp, synthesizes speech, and assembles H.264 video with AAC audio using FFmpeg. Captions are burned into the film and exported separately as SRT. Their timing is estimated within each audio segment; word-level alignment is outside the current version.
 
-## The database volume was in the wrong directory
+My machine did not have FFmpeg installed, so the native setup uses `ffmpeg-static`. Speech uses macOS `say` locally. The Docker image includes FFmpeg and `espeak-ng` for Linux speech, with OpenAI speech available as an optional configuration.
 
-A more consequential problem appeared when the database container was recreated. Earlier test revisions disappeared even though the Compose file declared a named volume and the container reported healthy.
+Each scene has a fingerprint calculated from its rendering inputs. If an identical clip already exists, the renderer can reuse it. Unaffected scenes keep their previous file paths.
 
-The volume was mounted at `/data`. The selected FalkorDB image was actually writing its data under `/var/lib/falkordb/data`.
+![Frames from the original and corrected verdict videos displayed side by side.](article-assets/compare-verdicts.png)
 
-The fix was to mount the named volume at the directory FalkorDB really used. Before replacing the running container again, the current database files were copied into the volume. The API's current version ID and total version count were saved for comparison. After replacement, all six revisions present at that checkpoint were still there, with the same active cut.
+_The original cut recommends Orbit by $40. The corrected cut recommends Forma by $9. These are frames from the generated MP4s._
 
-The native application and the full Docker application also use separate graph names, because they have separate media directories. Sharing a graph while pointing at different media stores would leave valid version records referring to missing video files.
+## The cache bug that gave the wrong edit count
 
-## Recording exposed another lifecycle bug
+One repeated correction produced the right video but reported zero updated scenes and four preserved scenes.
 
-The first walkthrough recording reached the end of the browser interaction and then failed while saving the video. The script had closed the browser connection before calling Playwright's `video.saveAs`.
+The renderer was tracking whether FFmpeg had generated a new file during that run. The interface used that flag to decide whether a scene had changed from the previous cut.
 
-The order now closes the browser context to flush the recording, saves the video while the connection is available, and then closes the browser. FFmpeg converts that capture to MP4. The walkthrough is silent so it can take a human voiceover; the exported story films contain synthesized narration.
+Those conditions differ when a correction restores an older clip. If the scene changes from A to B, then back to A, the renderer can reuse cached A. The scene has still changed relative to B.
 
-The comparison shot also needed work. Showing two poster images was a weak way to demonstrate generated video. The recorder now plays the real verdict sections side by side. The exported MP4s were decoded as part of checking the recording, and the browser checks verify playback.
+I changed the scene status to compare its fingerprint with the previous version's fingerprint. Cache reuse is logged separately. The browser checks now expect two updated scenes and two preserved scenes for the adapter correction, even when a cached clip is restored.
 
-## Replacing the first interface
+The fingerprint also needed a precise definition. It describes a scene's rendering inputs. To verify that preserved media files contain the same bytes, the browser checks separately calculate their SHA-256 checksums.
 
-The first studio had a cream background, sage cards, rounded controls, an oversized sidebar, and decorative copy about stories following facts. It worked, but I told Codex that it looked AI-made. The visual treatment was too close to a generic dashboard for a product that was supposed to edit a film.
+## Keeping a failed revision from replacing a good cut
 
-![The first CUTBACK interface, with a pale background, large left sidebar, rounded cards, and green accents.](article-assets/studio-before-redesign.png)
+Two requests can arrive with the same expected version number. I use a conditional update in FalkorDB to let only one request acquire the revision lock. The new version becomes active after rendering and verification succeed.
 
-_The earlier interface. Its sidebar repeated navigation already available above the player, while the source controls and timeline had less room._
+If the API restarts during a run, that run is marked as failed and the previous cut remains available. The current implementation assumes a single API process.
 
-The redesign uses charcoal panels, warm white text, and amber for actions and changed states. IBM Plex Sans handles the controls, IBM Plex Mono handles time and data labels, and Barlow Condensed gives the headings a different shape. The fonts are bundled with the application.
+Startup needed similar care. When FalkorDB was unavailable, the SDK could emit a connection error before the application received a client instance to attach an error listener to. I added a TCP availability check and initialization retries so the API can report that it is not ready yet.
 
-The sidebar and pretend workspace selector are gone. The player sits in a labelled program monitor. The sequence uses clip widths based on duration, and the source inspector remains beside the video on desktop. The copy names what a control does: source inspector, dependency map, saved cuts. Browser checks cover the correction flow and a narrow mobile layout after the change.
+## The volume mount that lost earlier revisions
 
-## What I would put in the submission
+I found a persistence problem after recreating the database container. Earlier test revisions disappeared even though the Compose file declared a named volume and the container was healthy.
 
-CUTBACK fits Track 1, Agents That Act on Connected Data. The graph selects an edit, the tools supply the evidence for that selection, and the action produces a revised video. Saved history supports the workflow, but I am not presenting it as a general agent-memory platform.
+I had mounted the volume at `/data`. The image I was using wrote to `/var/lib/falkordb/data`.
 
-The repository includes setup instructions, the graph model, the Cypher queries, and a repeatable walkthrough recorder. The tested slice is one local project with fictional products and an authored comparison template. It does not ingest arbitrary videos or documents, and it does not yet offer a hosted multi-user editor.
+Before replacing the container again, I copied the current database files into the volume and recorded the active version ID and revision count. I corrected the mount, recreated the container, and checked those values again. All six revisions present at that checkpoint survived, with the same active cut.
 
-Before recording the agent submission, I still need to configure my OpenAI key, verify its tool calls, and review the implementation well enough to explain it. The local test result is useful evidence about the graph and renderer; the submission needs an actual agent run too.
+The native application and Docker application also use separate graph names because they have separate media stores. Otherwise, one could read a valid version record whose video files existed only in the other environment.
 
-For the live demo, I would change the adapter price after showing the initial reversal. At $40, both products cost $119, so the verdict should be a tie. At $20, Orbit costs $99 and becomes cheaper again. Those inputs give someone watching a direct way to challenge the result.
+## The setup and recording problems
 
-The adapter is a small example. Keeping the edit tied to the reason it changed is the part I want to develop further.
+A dependency audit reported seven advisories, including two critical findings. Updating the affected packages brought npm's reported count to zero at the time of the check, but the first installation failed halfway through.
+
+The machine had about 122 MiB free. npm reported `ENOSPC`, then `ENOTEMPTY` on a retry because the interrupted operation had left partially moved package directories. Docker also began returning I/O errors.
+
+Clearing npm's downloadable cache recovered roughly 2.7 GB. A clean `npm ci` repaired the installation after the lockfile update. I restarted Docker, then reran the build, graph tests, and browser workflow.
+
+The automated environment had two other limitations. I moved the browser checks to an isolated Chrome session through Playwright when the first UI automation route was unavailable. An IPC restriction in the `tsx` command was resolved by invoking Node with `--import tsx` in the relevant scripts.
+
+Recording found another ordering bug. The walkthrough completed its interactions, then failed to save because the script closed the browser connection before calling Playwright's `video.saveAs`.
+
+I changed the sequence to close the browser context, save the flushed recording while the connection remained available, and then close the browser. The walkthrough is silent for a voiceover; the exported comparison films contain synthesized narration. The comparison view now plays the actual verdict videos, and the exported MP4s were decoded to check the files.
+
+## Making the interface fit the task
+
+The first interface had a cream background, sage cards, rounded controls, and a large sidebar. I was not happy with it. The sidebar repeated navigation already available above the player, while the source controls and timeline had less room.
+
+![The original CUTBACK interface before the redesign.](article-assets/studio-before-redesign.png)
+
+_The first interface. I removed the oversized sidebar and gave more space to the editing controls._
+
+I changed it to charcoal panels, warm white text, and amber actions. IBM Plex Sans handles controls, IBM Plex Mono handles time and data labels, and Barlow Condensed is used for headings. The fonts are bundled locally.
+
+The sequence now sizes clips by duration, and the source inspector sits beside the player on desktop. Browser checks cover the correction flow, history, playback, and the narrow mobile layout after the redesign.
+
+## What I want to test next
+
+CUTBACK's current scope is one authored comparison with fictional data. The next larger problem is connecting claims to evidence across more video formats, especially when a correction changes the structure of the explanation rather than a price or verdict.
+
+For the existing demo, I can challenge the result with different adapter prices. At $40, both products cost $119 and the verdict should become a tie. At $20, Orbit's total becomes $99 and it should win again. The same two scenes should change in each case.
+
+I built this for the hackathon's **Agents That Act on Connected Data** track. The part I want viewers to inspect is the full path from a corrected source fact to an edit: the query that selects the scenes, the calculation behind the new verdict, and the video files that show what changed.

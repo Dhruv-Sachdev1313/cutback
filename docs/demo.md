@@ -42,6 +42,22 @@ The recording keeps the app's visible mode label. Without an API key it demonstr
 
 Change the adapter price to **$40** while it is excluded: both products cost $119, and the result must be a tie. Change it to **$20**: Orbit is still cheaper. These inputs show that the conclusion is calculated, not a scripted switch to Forma.
 
+## Showing the database in FalkorDB Browser
+
+Add a short database segment after the correction preview, or record it separately for the article:
+
+1. Run `docker compose up -d falkordb` if needed, then open **http://localhost:6388**.
+2. In **Manual Configuration**, enter host `localhost` and port `6379`. Leave username and password empty for this local Compose setup, then select **Log in**. The Browser and database share a container; native clients outside it use port `6387`.
+3. Skip the tutorial if it appears, and select the **cutback** graph. The optional full Docker application uses **cutback_docker** instead.
+4. Run query 2 from [falkordb-browser.cypher](falkordb-browser.cypher). Show the two paths through the calculation and claims to the cost and verdict scenes.
+5. Run query 3 and select **Table** to show `02 · The real cost` and `03 · The verdict` with their dependency paths.
+
+Suggested narration: “This is the same database the editing tools query. Starting at the corrected fact reaches these two scenes. The opening and closing have no dependency on that price.”
+
+The current model returns six unique nodes and five relationships for this correction. Choose **Tree → Left → Right** from the layout selector and use **Zoom in** to make the graph labels readable. These display choices do not change the graph model.
+
+Query 1 shows all 16 authored artifacts, and query 4 shows the stored video versions. All four queries are read-only. A reproducible screenshot capture is available with `node scripts/falkordb-screenshots.mjs`.
+
 ## Submission material
 
 - Track: **Agents That Act on Connected Data (Track 1)**.

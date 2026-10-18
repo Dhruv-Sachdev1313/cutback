@@ -100,6 +100,7 @@ RETURN DISTINCT a.id AS id, a.kind AS kind,
 
 - [Complete graph model](docs/graph-model.md)
 - [Essential Cypher queries](docs/queries.cypher)
+- [Queries for the FalkorDB Browser demonstration](docs/falkordb-browser.cypher)
 - [Architecture and scope](docs/architecture.md)
 - [Recording script and demo challenge](docs/demo.md)
 - [Build story with screenshots and debugging notes](docs/building-cutback.md)
