@@ -38,9 +38,9 @@ I kept the products and source sheets fictional so the entire example could be u
 
 ## Starting with an upload and its sources
 
-My first demo opened on an already prepared film and graph. That made the result easy to show, but left an obvious question: where had the information come from?
+CUTBACK starts with an empty project. I upload the MP4 and attach the original source sheets used by the video. The revised source is supplied separately, after reviewing the original claims.
 
-I changed the application to start with an empty project. I upload the MP4 and attach the original source sheets used by the video. The later correction is supplied separately, after reviewing the original claims.
+Keeping those inputs separate matters. The initial graph needs to describe the evidence behind the uploaded film. The later source change gives the agent a specific fact to reconsider and a reason for changing it.
 
 ![A new CUTBACK project with the video and original source material selected.](article-assets/upload-start.png)
 
@@ -149,27 +149,29 @@ For the speaker film, the final chart values and narration are compiled from the
 
 Once the plan is ready, I review it and approve the render.
 
-## Why I removed the correction cards
+## Rebuilding the scenes inside the video
 
-The first upload implementation replaced affected segments with labelled correction cards and synthetic narration. The information was updated, but the result felt like an interruption to the film.
+The goal was to carry a source change through the film itself. If the complete price changes, the cost chart needs a new value and bar length. If the cheaper product changes, the verdict needs a different speaker illustration and recommendation. The narration and captions have to agree with both.
 
-I wanted the revised comparison to work as a complete video. Its cost scene should show the new costs. Its verdict should recommend the right speaker. The source trail can remain available in the application without being read aloud in the film.
+I built the speaker film around editable scene layouts. The renderer takes the revised values, calculates the totals and winner, and uses the result to generate the visuals and narration for the affected scenes. That gives the comparison a consistent appearance while allowing its argument to change.
 
-I changed the renderer to rebuild the speaker film's existing chart and illustration layouts. It keeps the colours, typography, speaker drawings, and local narration voice. The revised verdict now says:
+The revised verdict says:
 
 > Forma One costs $9 less to get started. That makes it our lower-cost pick.
 
 ![The original Orbit verdict and revised Forma verdict shown side by side.](article-assets/upload-verdict-comparison.png)
 
-_The recommendation changes with the total cost. There is no correction announcement inserted into the film._
+_The revised film recommends Forma and shows its $9 advantage using the same visual style as the original._
 
-The implementation is deliberately specific about visual reconstruction. The supplied speaker film has editable layouts, recognised by the uploaded file's SHA-256 fingerprint. Renaming an unrelated file to match the demo filename will not select them. The fingerprint identifies the rendering layout and cut points; a fresh project's facts and dependencies still come from analysis of its inputs.
+The uploaded file's SHA-256 fingerprint identifies the speaker film's editable layouts and cut points. This prevents an unrelated file with the same filename from receiving the wrong layout. A fresh project's facts and dependencies still come from analysis of its inputs.
 
 Other uploaded videos use editorial replacement scenes with local synthetic narration. This prototype does not reconstruct arbitrary footage, clone a speaker's voice, or change a filmed person's lip movements.
 
 For rendering, Sharp converts SVG layouts into PNG frames. Local speech synthesis produces the narration, and FFmpeg assembles H.264 video with AAC audio. The export also includes SRT captions. Caption timing is estimated within segments; I have not implemented word-level alignment.
 
-Scenes outside the affected set retain their uploaded footage and audio, with format normalization for the final MP4. The original upload and earlier exports remain available.
+Combining retained footage with newly rendered scenes also requires compatible media streams. I normalise the clips to a 1280 × 720 canvas at 24 frames per second, with AAC audio at 48 kHz in stereo, before concatenating them. Videos with another aspect ratio are fitted inside that canvas.
+
+Scenes outside the affected set retain their uploaded footage and audio through that normalization. Each completed export also records the source change and the scenes it rebuilt in FalkorDB, so I can inspect the edit later. The original upload and earlier exports remain available.
 
 ## A correct price can still produce a bad cut
 
@@ -187,13 +189,13 @@ That run followed its stored graph, but the graph was broader than the intended 
 
 This is the next part I want to improve: word-level timing, better claim-to-scene checks, and an editor for reviewing dependency edges. The current review screen lets me inspect the connections and adjust fact wording, but it does not yet let me repair individual edges.
 
-## Keeping the demo usable while changing it
+## Keeping projects separate and controlling API costs
 
-The upload flow was a substantial change, so I developed it in a separate Git worktree with its own app port, FalkorDB port, Browser port, data directory, and Docker volume. The earlier demo could keep running while I changed the new workflow.
+Each project needs its graph, source media, and exports to stay together. I gave every upload its own graph and media directory, with a project index for finding it again. Starting another upload creates an empty project; previous attempts stay behind the Projects button.
 
-That also solved a presentation problem. Rehearsing the original application accumulated many video versions. A new upload now creates a new project with no inherited exports. Earlier attempts stay behind the Projects button, where I can reopen them if needed.
+During development, I also kept the upload workflow in a separate Git worktree with its own app port, database port, Browser port, data directory, and Docker volume. That let me test changes while keeping a working version available. Separating only the code would not have protected its database or media files.
 
-I added a path for reusing a reviewed speaker-film analysis when changing its presentation. It copies the saved transcript, facts, and correction into a separate project, aligns the saved claims with the authored scene boundaries, and queries FalkorDB for the edit scope. I could replace the old card export without paying for the same analysis again.
+I also wanted to avoid paying to extract the same information during every rendering experiment. For the supplied speaker film, I added a way to reuse its reviewed transcript, facts, and source change in a separate project. The application aligns the saved claims with the authored scene boundaries and queries FalkorDB for the edit scope again. Rendering can then proceed from that saved analysis without another model request.
 
 I was working with $5 of API credit, so the expensive stages needed to be explicit. Transcription, narration, playback, and rendering run locally. Analysis and agent planning use the API. I added a persisted $1 application allowance, estimated reservations before requests, and no automatic retries or fallback to another paid provider. The allowance is a local estimate, not my OpenAI account balance.
 
@@ -201,7 +203,7 @@ The backend also prevents overlapping jobs on the same project. If the process r
 
 There were ordinary setup problems too. Earlier in the build, a FalkorDB volume was mounted at `/data` while the image wrote to `/var/lib/falkordb/data`. I corrected the mount and checked revision persistence after recreating the container. A nearly full disk interrupted npm installation and caused Docker I/O errors; recovering disk space and reinstalling dependencies was necessary before application debugging could continue.
 
-The earlier authored renderer also confused a cached clip with an unchanged scene. Restoring a previously rendered clip could report zero edits even though the video had changed from the preceding version. I separated cache reuse from the comparison with the previous cut. That experience made me more careful about what an export receipt actually claims.
+I also found a reporting bug while building the authored renderer. Restoring a previously rendered clip could report zero edits because the renderer had reused a cached file. But that clip could still differ from the preceding version. I separated cache reuse from the comparison with the previous cut: whether a file needs rendering and whether a scene has changed are separate questions.
 
 ## Checking the result and the remaining work
 
