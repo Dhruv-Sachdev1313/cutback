@@ -16,10 +16,25 @@ export type ImportedScene = {
   transcript: string;
   frameUrl: string;
   clipUrl?: string;
+  layout?: 'opening' | 'cost' | 'verdict' | 'outro';
 };
 export type ImportedFact = { id: string; text: string; evidenceId: string; quote: string };
 export type ImportedClaim = { id: string; text: string; factIds: string[]; sceneIds: string[] };
-export type Edit = { sceneId: string; title: string; narration: string; reason: string };
+export type Edit = {
+  sceneId: string;
+  title: string;
+  narration: string;
+  reason: string;
+  visual?: {
+    layout: 'opening' | 'cost' | 'verdict' | 'outro';
+    evidence: {
+      orbitBase: number;
+      orbitAdapter: number;
+      adapterIncluded: boolean;
+      formaBase: number;
+    };
+  };
+};
 export type Correction = { factId: string; text: string; source: string };
 export type UploadEvent = { at: string; tool: string; detail: string };
 export type ImportedRevision = {
@@ -27,6 +42,8 @@ export type ImportedRevision = {
   createdAt: string;
   videoUrl: string;
   captionsUrl: string;
+  posterUrl?: string;
+  presentation?: 'integrated';
   correction: Correction;
   edits: Edit[];
   affectedIds: string[];
@@ -66,6 +83,8 @@ export type UploadProject = {
   impact?: { sceneIds: string[]; paths: string[][]; query: string };
   revisions: ImportedRevision[];
   events: UploadEvent[];
+  renderProfile?: 'speaker-study-v1';
+  derivedFrom?: string;
 };
 export type GraphView = {
   nodes: { id: string; title: string; kind: string }[];

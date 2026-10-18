@@ -7,6 +7,13 @@ import ffprobeStatic from 'ffprobe-static';
 import sharp from 'sharp';
 import type { Edit, ImportedScene, UploadProject } from '../../shared/upload.js';
 import { uploadConfig, urlFor, fileFor } from './config.js';
+import {
+  detectRenderProfile,
+  SPEAKER_BOUNDARIES,
+  SPEAKER_LAYOUTS,
+  captionPhrases,
+  presentationSvg,
+} from './presentation.js';
 const execute = promisify(execFile);
 const ffmpeg = ffmpegStatic!;
 const ffprobe = ffprobeStatic.path;
@@ -47,33 +54,36 @@ export function sceneBoundaries(duration: number, cuts: number[]) {
 export async function extract(
   p: UploadProject,
   log: (tool: string, detail: string) => Promise<void>,
+  options: { reuseTranscript?: boolean } = {},
 ) {
   const dir = path.join(uploadConfig.media, p.id);
   const input = fileFor(p.originalUrl);
   let segments: { start: number; end: number; text: string }[] = [];
   if (p.hasAudio) {
-    await log(
-      'transcribe_local',
-      'Extracting audio and transcribing on this computer. No OpenAI audio charge.',
-    );
-    await ff(['-i', input, '-vn', '-ar', '16000', '-ac', '1', path.join(dir, 'audio.wav')]);
-    const python = path.resolve('.venv/bin/python');
-    try {
-      await fs.access(python);
-    } catch {
-      throw new Error(
-        'Local transcription is not installed. Run npm run upload:setup-transcription.',
+    if (!options.reuseTranscript) {
+      await log(
+        'transcribe_local',
+        'Extracting audio and transcribing on this computer. No OpenAI audio charge.',
+      );
+      await ff(['-i', input, '-vn', '-ar', '16000', '-ac', '1', path.join(dir, 'audio.wav')]);
+      const python = path.resolve('.venv/bin/python');
+      try {
+        await fs.access(python);
+      } catch {
+        throw new Error(
+          'Local transcription is not installed. Run npm run upload:setup-transcription.',
+        );
+      }
+      await execute(
+        python,
+        [
+          path.resolve('scripts/transcribe-local.py'),
+          path.join(dir, 'audio.wav'),
+          path.join(dir, 'transcript.json'),
+        ],
+        { cwd: process.cwd(), timeout: 600000, maxBuffer: 4e6 },
       );
     }
-    await execute(
-      python,
-      [
-        path.resolve('scripts/transcribe-local.py'),
-        path.join(dir, 'audio.wav'),
-        path.join(dir, 'transcript.json'),
-      ],
-      { cwd: process.cwd(), timeout: 600000, maxBuffer: 4e6 },
-    );
     const data = JSON.parse(await fs.readFile(path.join(dir, 'transcript.json'), 'utf8'));
     segments = data.segments;
     p.evidence = segments
@@ -94,30 +104,40 @@ export async function extract(
       'This video has no audio track. Analysis will use frames and any supplied notes.',
     );
   }
-  await log('detect_scenes', 'Finding visual cuts and extracting frame evidence.');
-  const { stderr } = await ff([
-    '-i',
-    input,
-    '-vf',
-    "scale=320:-1,select='gt(scene,0.22)',showinfo",
-    '-an',
-    '-f',
-    'null',
-    '-',
-  ]);
-  const cuts = [...stderr.matchAll(/pts_time:([\d.]+)/g)].map((m) => Number(m[1]));
-  const boundaries = sceneBoundaries(p.duration, cuts);
-  // Snap a cut to a nearby speech ending to avoid splitting a spoken sentence.
-  for (let i = 1; i < boundaries.length - 1; i++) {
-    const nearby = segments
-      .filter(
-        (s) =>
-          Math.abs(s.end - boundaries[i]) < 1.2 &&
-          s.end > boundaries[i - 1] + 1 &&
-          s.end < boundaries[i + 1] - 1,
-      )
-      .sort((a, b) => Math.abs(a.end - boundaries[i]) - Math.abs(b.end - boundaries[i]))[0];
-    if (nearby) boundaries[i] = nearby.end;
+  p.renderProfile = await detectRenderProfile(input);
+  let boundaries: number[];
+  if (p.renderProfile === 'speaker-study-v1') {
+    boundaries = [...SPEAKER_BOUNDARIES, p.duration];
+    await log(
+      'detect_scenes',
+      'Recognised the authored speaker film by its media fingerprint. Using its four editable scene boundaries.',
+    );
+  } else {
+    await log('detect_scenes', 'Finding visual cuts and extracting frame evidence.');
+    const { stderr } = await ff([
+      '-i',
+      input,
+      '-vf',
+      "scale=320:-1,select='gt(scene,0.22)',showinfo",
+      '-an',
+      '-f',
+      'null',
+      '-',
+    ]);
+    const cuts = [...stderr.matchAll(/pts_time:([\d.]+)/g)].map((m) => Number(m[1]));
+    boundaries = sceneBoundaries(p.duration, cuts);
+    // Snap a cut to a nearby speech ending to avoid splitting a spoken sentence.
+    for (let i = 1; i < boundaries.length - 1; i++) {
+      const nearby = segments
+        .filter(
+          (s) =>
+            Math.abs(s.end - boundaries[i]) < 1.2 &&
+            s.end > boundaries[i - 1] + 1 &&
+            s.end < boundaries[i + 1] - 1,
+        )
+        .sort((a, b) => Math.abs(a.end - boundaries[i]) - Math.abs(b.end - boundaries[i]))[0];
+      if (nearby) boundaries[i] = nearby.end;
+    }
   }
   p.scenes = [];
   for (let i = 0; i < boundaries.length - 1; i++) {
@@ -144,7 +164,16 @@ export async function extract(
       .filter((s) => s.start < end && s.end > start)
       .map((s) => s.text)
       .join(' ');
-    p.scenes.push({ id, title: `Scene ${i + 1}`, start, end, transcript: text, frameUrl });
+    const layout = p.renderProfile ? SPEAKER_LAYOUTS[i] : undefined;
+    const title = layout
+      ? {
+          opening: 'The question',
+          cost: 'The real cost',
+          verdict: 'The verdict',
+          outro: 'The evidence',
+        }[layout]
+      : `Scene ${i + 1}`;
+    p.scenes.push({ id, title, start, end, transcript: text, frameUrl, layout });
     p.evidence.push({
       id: 'frame' + i,
       kind: 'frame',
@@ -169,11 +198,6 @@ export async function extract(
     `${p.scenes.length} video segments and ${p.evidence.length} evidence items ready for analysis.`,
   );
 }
-const escape = (s: string) =>
-  s.replace(
-    /[&<>"']/g,
-    (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' })[c]!,
-  );
 function lines(text: string, width = 57) {
   const result: string[] = [];
   let line = '';
@@ -187,7 +211,7 @@ function lines(text: string, width = 57) {
   if (line) result.push(line);
   return result;
 }
-async function correctedCard(edit: Edit, dir: string) {
+async function editorialScene(edit: Edit, dir: string) {
   await fs.mkdir(dir, { recursive: true });
   const script = path.join(dir, 'narration.txt');
   await fs.writeFile(script, edit.narration);
@@ -209,25 +233,20 @@ async function correctedCard(edit: Edit, dir: string) {
     audio,
   ]);
   const duration = Math.ceil((Number(stdout) + 0.5) * 24) / 24;
-  const title = lines(edit.title, 42).slice(0, 2);
-  const body = lines(edit.narration, 72);
+  const body = captionPhrases(edit.narration);
+  const total = body.reduce((n, phrase) => n + phrase.length, 0);
+  await sharp(Buffer.from(presentationSvg(edit, '')))
+    .png()
+    .toFile(path.join(dir, 'poster.png'));
   const pages = [];
-  const pageCount = Math.ceil(body.length / 6);
+  const pageCount = body.length;
   for (let i = 0; i < pageCount; i++) {
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720"><rect width="1280" height="720" fill="#eee9df"/><rect x="0" y="0" width="14" height="720" fill="#a94c31"/><text x="72" y="76" font-family="Arial" font-size="20" fill="#a94c31" letter-spacing="4">CUTBACK / CORRECTION</text>${title.map((l, j) => `<text x="72" y="${153 + j * 58}" font-family="Arial" font-weight="bold" font-size="46" fill="#202923">${escape(l)}</text>`).join('')}${body
-      .slice(i * 6, i * 6 + 6)
-      .map(
-        (l, j) =>
-          `<text x="72" y="${307 + j * 45}" font-family="Arial" font-size="29" fill="#303b33">${escape(l)}</text>`,
-      )
-      .join(
-        '',
-      )}<line x1="72" x2="1208" y1="640" y2="640" stroke="#bcb6aa"/><text x="72" y="683" font-family="Arial" font-size="18" fill="#647067">Revised from source evidence · synthetic narration</text><text x="1145" y="683" font-family="Arial" font-size="18" fill="#647067">${i + 1}/${pageCount}</text></svg>`;
-    const name = `card-${i}.png`;
+    const svg = presentationSvg(edit, body[i]);
+    const name = `frame-${i}.png`;
     await sharp(Buffer.from(svg)).png().toFile(path.join(dir, name));
-    pages.push(`file '${name}'\nduration ${(duration / pageCount).toFixed(6)}`);
+    pages.push(`file '${name}'\nduration ${((duration * body[i].length) / total).toFixed(6)}`);
   }
-  pages.push(`file 'card-${pageCount - 1}.png'`);
+  pages.push(`file 'frame-${pageCount - 1}.png'`);
   await fs.writeFile(path.join(dir, 'frames.txt'), pages.join('\n'));
   const output = path.join(dir, 'clip.mp4');
   await ff([
@@ -240,7 +259,7 @@ async function correctedCard(edit: Edit, dir: string) {
     '-i',
     audio,
     '-vf',
-    'fps=24,format=yuv420p',
+    `fps=24,format=yuv420p,fade=t=in:st=0:d=0.25,fade=t=out:st=${Math.max(0, duration - 0.2)}:d=0.2`,
     '-af',
     'apad',
     '-t',
@@ -266,7 +285,7 @@ async function correctedCard(edit: Edit, dir: string) {
 async function originalClip(p: UploadProject, s: ImportedScene) {
   const dir = path.join(uploadConfig.media, p.id, 'original-clips');
   await fs.mkdir(dir, { recursive: true });
-  const output = path.join(dir, s.id + '.mp4');
+  const output = path.join(dir, `${s.id}-${s.start.toFixed(6)}-${s.end.toFixed(6)}.mp4`);
   try {
     await fs.access(output);
   } catch {
@@ -317,10 +336,10 @@ export async function renderImported(
     const edit = p.edits!.find((e) => e.sceneId === scene.id);
     await log(
       'render_segment',
-      `${scene.title}: ${edit ? 'rendering a correction card and new narration' : 'preserving uploaded footage and audio'}.`,
+      `${scene.title}: ${edit ? 'rendering updated visuals and narration' : 'preserving uploaded footage and audio'}.`,
     );
     clips.push(
-      edit ? await correctedCard(edit, path.join(dir, scene.id)) : await originalClip(p, scene),
+      edit ? await editorialScene(edit, path.join(dir, scene.id)) : await originalClip(p, scene),
     );
   }
   await fs.writeFile(
@@ -356,5 +375,9 @@ export async function renderImported(
   return {
     videoUrl: urlFor(`${p.id}/${id}/revised.mp4`),
     captionsUrl: urlFor(`${p.id}/${id}/captions.srt`),
+    posterUrl: urlFor(
+      `${p.id}/${id}/${p.scenes.find((s) => p.edits!.some((e) => e.sceneId === s.id))!.id}/poster.png`,
+    ),
+    presentation: 'integrated' as const,
   };
 }

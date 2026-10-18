@@ -137,14 +137,12 @@ app.post('/api/projects/:id/analyse', async (req, res) => {
   if (body.provider === 'api' && !process.env.OPENAI_API_KEY)
     throw new Error('Configure an API key or connect ChatGPT.');
   if (body.provider === 'chatgpt') await auth.access();
-  res
-    .status(202)
-    .json(
-      await pipeline.start(req.params.id, 'analyse', undefined, {
-        ...body,
-        model: body.provider === 'api' ? uploadConfig.model : body.model,
-      }),
-    );
+  res.status(202).json(
+    await pipeline.start(req.params.id, 'analyse', undefined, {
+      ...body,
+      model: body.provider === 'api' ? uploadConfig.model : body.model,
+    }),
+  );
 });
 app.post('/api/projects/:id/provider', async (req, res) => {
   const body = z
@@ -171,6 +169,9 @@ app.post('/api/projects/:id/plan', async (req, res) =>
 );
 app.post('/api/projects/:id/render', async (req, res) =>
   res.status(202).json(await pipeline.start(req.params.id, 'render')),
+);
+app.post('/api/projects/:id/integrated', async (req, res) =>
+  res.status(201).json(await pipeline.integratedCopy(req.params.id)),
 );
 app.post('/api/auth/start', async (req, res) => {
   const body = z.object({ accountId: z.string().optional() }).parse(req.body);
