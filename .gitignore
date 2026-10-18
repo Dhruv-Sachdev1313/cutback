@@ -3,8 +3,14 @@ dist/
 .env
 .env.*
 !.env.example
+!.env.upload.example
 .cutback/
 coverage/
 .DS_Store
 *.log
 artifacts/
+.cutback-upload/
+dist-upload/
+.venv/
+.models/
+__pycache__/

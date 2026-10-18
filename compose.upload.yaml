@@ -1,0 +1,14 @@
+name: cutback-upload
+services:
+  falkordb:
+    image: falkordb/falkordb@sha256:b0bdcac2cbaff989e77cb0610439b7a9289e86de033ccbbd4368b66fb680ae7a
+    ports:
+      - '127.0.0.1:6397:6379'
+      - '127.0.0.1:6398:3000'
+    environment:
+      REDIS_ARGS: '--appendonly yes'
+      FALKORDB_ARGS: 'THREAD_COUNT 2'
+    volumes:
+      - upload-graph-data:/var/lib/falkordb/data
+volumes:
+  upload-graph-data:
